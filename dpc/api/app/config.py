@@ -48,3 +48,9 @@ FAULT_DIR = os.environ.get("FAULT_DIR", "/faults")
 LICENSE_CHECK_MS = os.environ.get("LICENSE_CHECK_MS", "300-900")
 # лише для RESOURCE_MODE=unprotected: пауза між читанням і записом лічильника, щоб гонка відтворювалась
 UNPROTECTED_GAP_MS = _int("UNPROTECTED_GAP_MS", 20)
+
+# ЛР2: розрахунок POST /v1/compute
+COMPUTE_TOLERANCE = _float("COMPUTE_TOLERANCE", 1e-6)  # відносна похибка проти еталона
+COMPUTE_POOL = os.environ.get("COMPUTE_POOL", "fresh")  # fresh – пул на кожен запит | warm – один пул на весь час роботи (О2.3)
+WARM_POOL_SIZE = _int("WARM_POOL_SIZE", 4)
+MP_START = os.environ.get("MP_START", "")  # спосіб запуску процесів: порожньо – типовий для платформи (Linux, Python 3.14 – forkserver)

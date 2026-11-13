@@ -1,5 +1,5 @@
-# Контракт частини Web, C08 «Каршеринг». Маршрути додаються з кожною ЛР; зараз – ЛР1.
-# x-course позначає роль маршруту для засобу check: main, object, list.
+# Контракт частини Web, C08 «Каршеринг». Маршрути додаються з кожною ЛР; зараз – ЛР1 і ЛР2.
+# x-course позначає роль маршруту для засобу check: main, object, update, cancel.
 # Приклади запитів посилаються на демодані migrations/900_seed.sql.
 openapi: 3.1.0
 info:
@@ -108,8 +108,16 @@ paths:
       summary: Забронювати автомобіль на 15 хвилин (головна операція)
       description: |
         В одній транзакції: блокування рядка авто, перевірка «не на обслуговуванні» і «немає
-        іншої незавершеної оренди», запис оренди в стані held. 201 надсилається після фіксації.
+        іншої незавершеної оренди», запис оренди в стані held, запис ключа ідемпотентності з
+        відповіддю. 201 надсилається після фіксації.
+
+        `Idempotency-Key` обов'язковий (немає – 400). Повтор з тим самим ключем і тим самим тілом
+        повертає збережену відповідь (той самий код, тіло й Location, `Idempotent-Replayed: true`),
+        зокрема й збережену предметну відмову 404/409; з іншим тілом – 422; ключ ще обробляється
+        іншою транзакцією – 409 `idempotency-key-in-progress` з `Retry-After`. Ключ діє 24 год.
       x-course: main
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -136,12 +144,14 @@ paths:
                   car_id: car-pod-004
       responses:
         "201":
-          description: Бронювання створено
+          description: Бронювання створено (або збережена відповідь на повтор з тим самим ключем)
           headers:
             Location:
               description: Адреса створеної оренди
               schema:
                 type: string
+            Idempotent-Replayed:
+              $ref: "#/components/headers/IdempotentReplayed"
           content:
             application/json:
               schema:
@@ -184,6 +194,9 @@ paths:
       responses:
         "200":
           description: Оренда
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -192,6 +205,93 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+    patch:
+      tags:
+        - rentals
+      operationId: extendRental
+      summary: Продовжити бронювання (If-Match з ETag)
+      description: |
+        Лише чинне бронювання (held, строк не минув). Перевірка версії й запис – одна інструкція
+        `UPDATE … WHERE version = :if_match`. Без If-Match – 428, застаріла версія – 412.
+        Змінити можна лише строк: власник, стан і версія – не поля запиту (422).
+      x-course: update
+      parameters:
+        - $ref: "#/components/parameters/RentalId"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RentalExtend"
+            examples:
+              normal:
+                summary: Продовжити на 10 хвилин
+                value:
+                  extend_minutes: 10
+              forbidden:
+                summary: Спроба змінити стан – 422
+                value:
+                  status: active
+      responses:
+        "200":
+          description: Строк продовжено, версія +1
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rental"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+
+  /v1/rentals/{id}/cancel:
+    post:
+      tags:
+        - rentals
+      operationId: cancelRental
+      summary: Скасувати бронювання; повтор повертає вже зафіксований стан
+      description: |
+        held → cancelled умовним записом `UPDATE … WHERE status = 'held'`. Повторне скасування
+        повертає той самий cancelled (`X-Already-Cancelled: true`) без жодної зміни: авто не
+        звільняється вдруге й нова оренда цього авто іншим водієм не зачіпається.
+      x-course: cancel
+      parameters:
+        - $ref: "#/components/parameters/RentalId"
+      responses:
+        "200":
+          description: Оренда скасована (зараз або раніше)
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            X-Already-Cancelled:
+              description: true – скасовано раніше, цей запит нічого не змінив
+              schema:
+                type: string
+                enum:
+                  - "true"
+                  - "false"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rental"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
 components:
   securitySchemes:
@@ -200,6 +300,50 @@ components:
       in: header
       name: X-User-Id
       description: "До ЛР3: ідентифікатор користувача з демоданих (u-driver-1, u-driver-2, u-operator)"
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Ключ ідемпотентності; той самий у всіх повторах однієї операції
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+      example: k-6f1c2a9e-4b7d-4c1e-9a55-2d3f8b0e7c11
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: ETag оренди з GET; без заголовка – 428
+      schema:
+        type: string
+      example: '"1"'
+    RentalId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+  headers:
+    ETag:
+      description: Версія оренди
+      schema:
+        type: string
+      example: '"2"'
+    IdempotentReplayed:
+      description: true – це збережена відповідь на повтор з тим самим ключем
+      schema:
+        type: string
+        enum:
+          - "true"
+          - "false"
+    RetryAfter:
+      description: Через скільки секунд повторити
+      schema:
+        type: integer
 
   schemas:
     Problem:
@@ -298,6 +442,16 @@ components:
           type: string
           minLength: 1
           maxLength: 64
+    RentalExtend:
+      type: object
+      additionalProperties: false
+      required:
+        - extend_minutes
+      properties:
+        extend_minutes:
+          type: integer
+          minimum: 1
+          maximum: 15
     Rental:
       type: object
       required:
@@ -351,7 +505,7 @@ components:
 
   responses:
     BadRequest:
-      description: Пошкоджений JSON
+      description: Пошкоджений JSON або немає чи неправильний Idempotency-Key
       content:
         application/problem+json:
           schema:
@@ -385,7 +539,13 @@ components:
             detail: car 'no-such-car' does not exist
             instance: /v1/rentals
     Conflict:
-      description: Автомобіль уже в незавершеній оренді (car-busy) або на обслуговуванні (car-in-service)
+      description: |
+        Автомобіль уже в незавершеній оренді (car-busy) або на обслуговуванні (car-in-service);
+        запит з цим Idempotency-Key ще обробляється (idempotency-key-in-progress, з Retry-After);
+        оренду не можна продовжити чи скасувати в поточному стані
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
       content:
         application/problem+json:
           schema:
@@ -396,8 +556,33 @@ components:
             status: 409
             detail: the car is in another active rental
             instance: /v1/rentals
+    PreconditionFailed:
+      description: If-Match не збігається з поточною версією
+      headers:
+        ETag:
+          $ref: "#/components/headers/ETag"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://example.edu/problems/precondition-failed
+            title: Rental was changed
+            status: 412
+            instance: /v1/rentals/690eb3a7-cea6-4658-9fe3-6a7c8cbc7e71
+    PreconditionRequired:
+      description: Немає If-Match
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://example.edu/problems/precondition-required
+            title: If-Match header required
+            status: 428
+            instance: /v1/rentals/690eb3a7-cea6-4658-9fe3-6a7c8cbc7e71
     Unprocessable:
-      description: Неправильні дані
+      description: Неправильні дані або Idempotency-Key уже використано з іншим тілом (idempotency-key-reused)
       content:
         application/problem+json:
           schema:

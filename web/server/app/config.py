@@ -45,3 +45,8 @@ FAULT_DIR = os.environ.get("FAULT_DIR", "/faults")
 
 # C08 Каршеринг: тривалість бронювання до розблокування (навчальне припущення картки)
 HOLD_MINUTES = _int("HOLD_MINUTES", 15)
+
+# ЛР2 Web, О2.2: строк дії ключа ідемпотентності й прибирання прострочених ключів порціями
+IDEMPOTENCY_TTL_H = _int("IDEMPOTENCY_TTL_H", 24)
+IDEMPOTENCY_CLEANUP_S = _float("IDEMPOTENCY_CLEANUP_S", 60.0)
+IDEMPOTENCY_CLEANUP_BATCH = _int("IDEMPOTENCY_CLEANUP_BATCH", 500)

@@ -5,6 +5,10 @@ web:
   base: http://localhost:8080
   items:
     - О1.6   # система, /health, X-Request-ID, журнал JSON
+    - О2.3   # повтор після втраченої відповіді (after_commit_before_response)
+    - О2.4   # повторні спроби в клієнті
+    - Д2.4   # продовження з If-Match (PATCH /v1/rentals/{id}, x-course: update)
+    - Д2.5   # повторне скасування (POST /v1/rentals/{id}/cancel, x-course: cancel)
   role_names:
     user: user
     staff: staff
@@ -26,7 +30,10 @@ web:
 dpc:
   openapi: dpc/openapi.yaml
   base: http://localhost:8000
-  items: []
+  items:
+    - О2.2   # дослідження точності
+    - Д2.1   # інший метод (Сімпсон, трапеції) і порівняння
+    - Д2.4   # послідовне, попарне й компенсоване сумування
   services:
     api: api
   load_s: 10
@@ -37,6 +44,16 @@ dpc:
     - queue_length
     - in_flight
     - rejected
+  # ЛР2: відносний допуск, n для прискорення, режими спільної суми (параметр тіла mode)
+  compute:
+    tolerance: 1.0e-6
+    bench_n: 20000000
+    modes:
+      param: mode
+      values:
+        - none
+        - lock
+        - local
 
 # Наскрізний сценарій з'явиться з ЛР4 Web (розблокування передає команду старту оренди в DPC).
 scenario: []

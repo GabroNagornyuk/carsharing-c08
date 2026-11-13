@@ -1,0 +1,21 @@
+{
+  "experiment": "web-o2.3-lost-response",
+  "car": "car-cen-002",
+  "key": "k-lost-ab6c4558ed22",
+  "first_attempt": "no response: RemoteProtocolError",
+  "retry": {
+    "instance": "app-b",
+    "status": 201,
+    "replayed": "true",
+    "location": "/v1/rentals/1dc13410-395f-4214-979a-bda6c2d1939a",
+    "rental_id": "1dc13410-395f-4214-979a-bda6c2d1939a"
+  },
+  "second_retry_same_id": true,
+  "rentals_created_in_db": 1,
+  "stored_key": [
+    "completed",
+    201,
+    "/v1/rentals/1dc13410-395f-4214-979a-bda6c2d1939a"
+  ],
+  "ok": true
+}

@@ -55,7 +55,7 @@
 <div id="result"></div>
 
 <script type="module">
-    import {call, getUser, kyivTime, money, Problem, setUser} from "./api.js";
+    import {call, getUser, kyivTime, money, mutate, Problem, setUser, UnknownResult} from "./api.js";
 
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"})[c]);
@@ -68,6 +68,12 @@
     $("book-service").onclick = () => book("car-pod-004");
 
     function showProblem(error) {
+        if (error instanceof UnknownResult) {
+            $("result").innerHTML = `<div class="card problem"><b>Результат невідомий</b><br>
+                Сервер не відповів після ${esc(error.attempts)} спроб (${esc(error.last)}). Бронювання могло
+                бути створене – перевірте «Мої оренди» пізніше.<div class="muted">ключ <code>${esc(error.key)}</code></div></div>`;
+            return;
+        }
         if (!(error instanceof Problem)) {
             $("result").innerHTML = `<div class="card problem">Мережа: ${esc(error.message)}</div>`;
             return;
@@ -97,12 +103,13 @@
 
     async function book(carId) {
         try {
-            const {status, headers, data} = await call("POST", "/v1/rentals", {body: {car_id: carId}});
+            const {status, headers, data, attempts} = await mutate("POST", "/v1/rentals", {car_id: carId},
+                {onAttempt: (a) => ($("result").innerHTML = `<div class="card">Спроба ${a.attempt}: ${a.status ?? a.error}…</div>`)});
             $("result").innerHTML = `<div class="card ok">
                 <b>${status} · Бронювання створено</b><br>
                 Авто <code>${esc(data.car_id)}</code>, стан <b>${esc(data.status)}</b><br>
                 Тримається до ${esc(kyivTime(data.expires_at))} (Київ)<br>
-                <span class="muted">Оренда <code>${esc(headers.get("location") ?? data.id)}</code></span></div>`;
+                <span class="muted">Оренда <code>${esc(headers.get("location") ?? data.id)}</code> · спроб: ${attempts}${headers.get("idempotent-replayed") === "true" ? " · збережений результат" : ""}</span></div>`;
             loadCars();
         } catch (error) {
             showProblem(error);

@@ -18,3 +18,15 @@ def percentile(values: list[float], q: float) -> float:
         return float("nan")
     k = max(0, min(len(ordered) - 1, round(q / 100 * len(ordered) + 0.5) - 1))  # nearest-rank
     return ordered[k]
+
+
+# Web ЛР2: прямі адреси екземплярів (дослід «через обидва екземпляри» й повтор через інший)
+WEB_A = os.environ.get("WEB_A_URL", "http://localhost:8001")
+WEB_B = os.environ.get("WEB_B_URL", "http://localhost:8002")
+
+
+def idem(key: str | None = None) -> dict[str, str]:
+    """Заголовок Idempotency-Key: новий ключ на кожну НОВУ операцію, той самий – на її повтори."""
+    import uuid
+
+    return {"Idempotency-Key": key or f"k-{uuid.uuid4()}"}

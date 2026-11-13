@@ -1,4 +1,4 @@
-# Контракт сервісу api частини DPC, C08 «Каршеринг». Маршрути додаються з кожною ЛР; зараз – ЛР1.
+# Контракт сервісу api частини DPC, C08 «Каршеринг». Маршрути додаються з кожною ЛР; зараз – ЛР1 і ЛР2.
 # x-course для засобу check: receiver, request-state, resource-state. "{uuid}" – новий id у кожному запиті.
 openapi: 3.1.0
 info:
@@ -22,6 +22,8 @@ tags:
     description: Службові маршрути
   - name: rental-starts
     description: Команди старту оренди та ресурс зони
+  - name: compute
+    description: Розрахунок ЛР2 – машино-години оренди
 
 paths:
   /health:
@@ -232,6 +234,79 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /v1/compute:
+    post:
+      tags:
+        - compute
+      operationId: compute
+      summary: Розрахунок ЛР2 – інтеграл n(t) = N(1 − e^(−t/τ)) на [a; b], машино-години
+      description: |
+        Синхронний: відповідь 200 – після об'єднання локальних сум усіх процесів. Проміжок вузлів
+        ділиться на `parts` (типово = `workers`) суцільних відрізків без пропусків і перекриття;
+        кожен процес пулу рахує локальну суму; батьківський процес додає їх у порядку номерів.
+        Еталон – через первісну N(t + τe^(−t/τ)); `within_tolerance` – відносна похибка ≤ 1e-6.
+        `mode`: local – локальні суми (робочий); lock – спільна змінна під блокуванням;
+        none – спільна змінна без синхронізації (лише для досліду О2.4, втрачені оновлення).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComputeRequest"
+            examples:
+              normal:
+                summary: Аеропорт, 6:00–18:00, 2·10^7 частин, 4 процеси
+                value:
+                  a: 0
+                  b: 12
+                  n: 20000000
+                  workers: 4
+              shared-none:
+                summary: Дослід О2.4 – спільна сума без синхронізації
+                value:
+                  n: 400000
+                  workers: 4
+                  mode: none
+      responses:
+        "200":
+          description: Результат
+          headers:
+            Location:
+              description: /v1/compute/{id}
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComputeJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/compute/{id}:
+    get:
+      tags:
+        - compute
+      operationId: getCompute
+      summary: Збережений результат розрахунку (останні 100, у пам'яті процесу api)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Результат
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComputeJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   securitySchemes:
     apiToken:
@@ -341,6 +416,146 @@ components:
           type: integer
         invariant_ok:
           type: boolean
+    ComputeRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - n
+      properties:
+        a:
+          type: number
+          default: 0
+          description: Початок, години від 6:00
+        b:
+          type: number
+          default: 12
+          description: Кінець, години від 6:00 (b > a)
+        n:
+          type: integer
+          minimum: 1
+          maximum: 400000000
+          description: Кількість частин поділу проміжку (навантаження)
+        workers:
+          type: integer
+          minimum: 1
+          maximum: 8
+          default: 1
+          description: Кількість процесів
+        parts:
+          type: integer
+          minimum: 1
+          maximum: 4096
+          description: Кількість відрізків вузлів; типово = workers
+        method:
+          type: string
+          enum:
+            - midpoint
+            - trapezoid
+            - simpson
+          default: midpoint
+          description: Середні прямокутники (основний), трапеції, Сімпсон (n парне)
+        order:
+          type: string
+          enum:
+            - forward
+            - reverse
+          default: forward
+          description: Порядок обходу вузлів у частині
+        summation:
+          type: string
+          enum:
+            - naive
+            - pairwise
+            - kahan
+          default: naive
+          description: Послідовне, попарне чи компенсоване сумування
+        mode:
+          type: string
+          enum:
+            - local
+            - lock
+            - none
+          default: local
+          description: Спосіб об'єднання (О2.4)
+        portion:
+          type: integer
+          minimum: 1
+          default: 1
+          description: Вузлів між додаваннями до спільної змінної (lock, none)
+        cars:
+          type: number
+          default: 10
+          description: N – парк зони, авто
+        tau:
+          type: number
+          default: 1.5
+          description: τ – стала розгону попиту, год
+    ComputeJob:
+      type: object
+      required:
+        - id
+        - state
+        - result
+      properties:
+        id:
+          type: string
+        state:
+          type: string
+          enum:
+            - done
+        active_parts:
+          type: integer
+        result:
+          type: object
+          properties:
+            value:
+              type: number
+              description: Машино-години
+            reference:
+              type: number
+            error:
+              type: number
+              description: value − reference
+            rel_error:
+              type: number
+            tolerance:
+              type: number
+            within_tolerance:
+              type: boolean
+            wall_s:
+              type: number
+              description: Час від параметрів до результату, зокрема запуск пулу
+            workers:
+              type: integer
+            parts:
+              type: integer
+            lost_value:
+              type: number
+              description: Лише lock/none – сума частин мінус спільна змінна (втрачені оновлення)
+        parts:
+          type: array
+          items:
+            type: object
+        timing:
+          type: object
+          description: Розклад часу – запуск пулу, частини, зупинка, об'єднання
+        params:
+          $ref: "#/components/schemas/ComputeRequest"
+      example:
+        id: 4e0b1f0c-2d4e-4c55-8f3a-7f6b9a1c2d3e
+        state: done
+        active_parts: 0
+        result:
+          value: 105.0050319394166
+          reference: 105.00503193941853
+          error: -1.9e-12
+          rel_error: 1.8e-14
+          tolerance: 1.0e-6
+          within_tolerance: true
+          wall_s: 0.41
+          workers: 4
+          parts: 4
+
   responses:
     BadRequest:
       description: Пошкоджений JSON

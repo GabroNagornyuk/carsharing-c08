@@ -3,6 +3,7 @@
 # dependencies = ["httpx>=0.28", "psycopg[binary]>=3.2"]
 # ///
 """Сценарії перевірки ЛР1 обох частин на запущеному стенді: uv run experiments/check_lab1.py
+(з ЛР2 Web кожне бронювання надсилає Idempotency-Key; усі перевірки разом – check_lab2.py)
 
 Друкує PASS/FAIL на кожну перевірку; код виходу 1, якщо є FAIL. Створені перевіркою оренди
 наприкінці переводяться в cancelled, щоб повторний запуск мав ті самі вільні авто.
@@ -15,8 +16,7 @@ import uuid
 
 import httpx
 import psycopg
-
-from common import DB, DPC, DPC_AUTH, WEB, user
+from common import DB, DPC, DPC_AUTH, WEB, idem, user
 
 failures = 0
 created: list[str] = []
@@ -41,7 +41,7 @@ def web_checks() -> None:
         check("О1.6 відповідь має X-Request-ID", bool(r.headers.get("x-request-id")))
 
         car = free_car(c, "center")
-        r = c.post("/v1/rentals", json={"car_id": car}, headers=user("u-driver-1"))
+        r = c.post("/v1/rentals", json={"car_id": car}, headers={**user("u-driver-1"), **idem()})
         ok = r.status_code == 201 and r.headers.get("location") == f"/v1/rentals/{r.json().get('id')}"
         check("О1.4 бронювання вільного авто – 201 і Location", ok, r.status_code)
         if r.status_code == 201:
@@ -52,7 +52,7 @@ def web_checks() -> None:
             check("     власник читає оренду – 200", g.status_code == 200 and g.json()["id"] == body["id"], g.status_code)
             g = c.get(r.headers["location"], headers=user("u-driver-2"))
             check("     чужа оренда – 404", g.status_code == 404, g.status_code)
-            r2 = c.post("/v1/rentals", json={"car_id": car}, headers=user("u-driver-2"))
+            r2 = c.post("/v1/rentals", json={"car_id": car}, headers={**user("u-driver-2"), **idem()})
             check("О1.4 те саме авто вдруге – 409 car-busy", r2.status_code == 409, r2.status_code)
             free = [x["id"] for x in c.get("/v1/cars", params={"zone": "center"}, headers=user("u-driver-1")).json()["items"]]
             check("     заброньоване авто зникло зі списку вільних", car not in free)
@@ -64,11 +64,11 @@ def web_checks() -> None:
             ("неправильні дані – 422", {"json": {"car": 1}}, 422),
         ]
         for name, kw, want in cases:
-            headers = {**user("u-driver-1"), **kw.pop("headers", {})}
+            headers = {**user("u-driver-1"), **idem(), **kw.pop("headers", {})}
             r = c.post("/v1/rentals", headers=headers, **kw)
             is_problem = r.headers.get("content-type", "").startswith("application/problem+json")
             check(f"О1.4 {name}, Problem Details", r.status_code == want and is_problem, r.status_code)
-        r = c.post("/v1/rentals", json={"car_id": "car-cen-001"})
+        r = c.post("/v1/rentals", json={"car_id": "car-cen-001"}, headers=idem())
         check("     без X-User-Id – 401", r.status_code == 401, r.status_code)
 
         # двоє (і більше) на одне авто: успіх лише один (інваріант 1)
@@ -77,7 +77,8 @@ def web_checks() -> None:
     async def race() -> list[httpx.Response]:
         async with httpx.AsyncClient(base_url=WEB, timeout=10) as ac:
             return await asyncio.gather(*(
-                ac.post("/v1/rentals", json={"car_id": car}, headers=user(f"u-driver-{1 + i % 2}")) for i in range(10)
+                ac.post("/v1/rentals", json={"car_id": car}, headers={**user(f"u-driver-{1 + i % 2}"), **idem()})
+                for i in range(10)
             ))
 
     replies = asyncio.run(race())
