@@ -76,6 +76,9 @@ flowchart LR
 | `postgres` | PostgreSQL 17 | спільна база обох частин |
 | `migrate` | `psql` + SQL-файли | застосовує `migrations/NNN_*.sql` по порядку під час запуску |
 
+На схемі – реалізовані компоненти. Ray, Spark, Kafka, потокова задача, etcd і координатори DPC, а також публікатор,
+обробник, симулятор і шлюзи Web додаються у відповідних ЛР.
+
 **Шлях запиту Web.** Клієнт → nginx → один з екземплярів → транзакція: блокування авто, перевірка інваріантів 1–2,
 позначення простроченого `held` як `expired`, вставка `rental` → фіксація → `201` з `Location`.
 
@@ -123,21 +126,43 @@ flowchart LR
 
 ## 5. Збирання й запуск
 
-Потрібні Docker 24+ з Compose v2 (пам'ять для Docker від 2 ГБ для ЛР1), вільні порти 8080, 8001, 8002, 8000, 5432,
-для сценаріїв – [uv](https://docs.astral.sh/uv/). Усі команди виконуються з кореня репозиторію.
+**Вимоги до середовища.**
+
+| Що | Вимога |
+|---|---|
+| Docker | Docker Engine 24+ або Docker Desktop 4.x (Windows – бекенд WSL 2), Compose v2.20+ (`docker compose`) |
+| Пам'ять і ядра для Docker | ЛР1 – від 2 ГБ і 2 ядер (з Ray і Spark у наступних ЛР – більше) |
+| Вільні порти | 8080 (nginx), 8001, 8002 (app-a, app-b), 8000 (api), 5432 (PostgreSQL), 8081, 8083 (клієнти) |
+| Сценарії й клієнти | [uv](https://docs.astral.sh/uv/) (сам завантажує потрібний Python) |
+
+Усі команди виконуються з кореня репозиторію.
 
 ```sh
-docker compose up -d --build        # postgres, migrate (міграції й демодані), app-a, app-b, nginx, api
+docker compose build                # збирання образів carsharing-web і carsharing-dpc-api
+docker compose up -d                # postgres, migrate (міграції й демодані), app-a, app-b, nginx, api
 docker compose ps
 curl -i http://localhost:8080/health
 curl -i http://localhost:8000/health
+uv run experiments/check_lab1.py    # сценарії перевірки виконаних пунктів
 ```
 
-Міграції й демодані застосовує сервіс `migrate` під час запуску. Параметри й типові значення – у
-[.env.example](.env.example) (файл `.env` необов'язковий). `docker compose down -v` видаляє базу; наступний запуск
-створить її заново.
+**Міграції.** SQL-файли `migrations/NNN_*.sql` застосовує сервіс `migrate` під час `docker compose up`, по черзі й кожен
+один раз (список: `docker compose run --rm migrate sh /migrate/migrate.sh --list`). `docker compose down -v` видаляє
+базу; наступний запуск створить її заново з демоданими.
 
-Клієнти (поза Compose, кожен в окремому терміналі):
+**Параметри з типовими значеннями** (змінюються в `.env`, приклад – [.env.example](.env.example)):
+
+| Параметр | Типово | Що задає |
+|---|---|---|
+| `NGINX_PORT`, `APP_A_PORT`, `APP_B_PORT`, `API_PORT`, `POSTGRES_PORT` | 8080, 8001, 8002, 8000, 5432 | порти на хості |
+| `HOLD_MINUTES` | 15 | тривалість бронювання (Web) |
+| `API_TOKEN` | `dev-token` | токен API DPC |
+| `QUEUE_CAPACITY`, `WORKERS` | 50, 4 | місткість черги й кількість обробників (DPC) |
+| `RESOURCE_MODE` | `locked` | `unprotected` – режим без синхронізації для досліду О1.4, лише на зоні `test-unprotected` |
+| `LICENSE_CHECK_MS` | `300-900` | тривалість повільного виклику, мс |
+
+**Клієнти** (поза Compose, кожен в окремому терміналі). Генераторів даних ЛР1 не потребує: демодані входять у міграцію
+`900_seed.sql` і збігаються з прикладами `openapi.yaml`.
 
 ```sh
 uv run python -m http.server 8081 --bind 127.0.0.1 --directory web/client   # http://localhost:8081
@@ -232,17 +257,19 @@ uv run python -m http.server 8083 --bind 127.0.0.1 --directory dpc/client   # ht
 ## 7. Досліди
 
 Перевірки виконаних пунктів обох частин – одна команда з кореня: `uv run experiments/check_lab1.py` (24 перевірки).
+Для засобу check предметні маршрути позначено `x-course` в [web/openapi.yaml](web/openapi.yaml) (`main`, `object`) і
+[dpc/openapi.yaml](dpc/openapi.yaml) (`receiver`, `request-state`, `resource-state`), налаштування – [checks.yaml](checks.yaml).
 Порівняльний режим без синхронізації – `RESOURCE_MODE=unprotected`, лише на тестовій зоні `test-unprotected`.
 
 Спільні умови: коміт `1ba1ff4`; Linux, 4 vCPU, 15 ГБ RAM; PostgreSQL 17.11 у Docker, сервіси – той самий код під
 uvicorn (Python 3.14); `QUEUE_CAPACITY=50`, `WORKERS=4`, повільний виклик 300–900 мс.
 
-| Дослід | Режим і команда | Що видно / посилання на результат |
-|---|---|---|
-| Заповнена черга (DPC О1.2, О1.3) | `uv run experiments/dpc_queue_health.py --clients 50 --seconds 30` | черга 50/50, 13 372 відповіді `429`, p95 `/health` – 26.8 мс. [results/dpc-o1.2-health-under-full-queue.json](results/dpc-o1.2-health-under-full-queue.json) |
-| Останні авто зони, без синхронізації (DPC О1.4) | `RESOURCE_MODE=unprotected docker compose up -d api`, потім `uv run experiments/dpc_invariant.py --label unprotected` | у 2 з 3 запусків 7 стартів на 5 авто, `invariant_ok=false`. [results/dpc-o1.4-unprotected.json](results/dpc-o1.4-unprotected.json) |
-| Останні авто зони, робочий режим (DPC О1.4) | `docker compose up -d api`, потім `uv run experiments/dpc_invariant.py --label locked` | щоразу рівно 5 стартів, `invariant_ok=true`. [results/dpc-o1.4-locked.json](results/dpc-o1.4-locked.json) |
-| Двоє на одне авто (Web О1.4) | `uv run experiments/check_lab1.py` | 10 одночасних бронювань одного авто через nginx → один `201`, дев'ять `409` |
+| Дослід | Режим і команда | Дані | Що видно / посилання на результат |
+|---|---|---|---|
+| Заповнена черга (DPC О1.2, О1.3) | `uv run experiments/dpc_queue_health.py --clients 50 --seconds 30` | зона `loadtest` (100 000 авто), 50 клієнтів, 30 с | черга 50/50, 13 372 відповіді `429`, p95 `/health` – 26.8 мс. [results/dpc-o1.2-health-under-full-queue.json](results/dpc-o1.2-health-under-full-queue.json) |
+| Останні авто зони, без синхронізації (DPC О1.4) | `RESOURCE_MODE=unprotected docker compose up -d api`, потім `uv run experiments/dpc_invariant.py --label unprotected` | зона `test-unprotected` (5 авто), 20 одночасних команд, 3 запуски | у 2 з 3 запусків 7 стартів на 5 авто, `invariant_ok=false`. [results/dpc-o1.4-unprotected.json](results/dpc-o1.4-unprotected.json) |
+| Останні авто зони, робочий режим (DPC О1.4) | `docker compose up -d api`, потім `uv run experiments/dpc_invariant.py --label locked` | ті самі | щоразу рівно 5 стартів, `invariant_ok=true`. [results/dpc-o1.4-locked.json](results/dpc-o1.4-locked.json) |
+| Двоє на одне авто (Web О1.4) | `uv run experiments/check_lab1.py` | перше вільне авто аеропорту, 10 одночасних запитів двох водіїв | 10 одночасних бронювань одного авто через nginx → один `201`, дев'ять `409` |
 
 **Заповнена черга**
 
