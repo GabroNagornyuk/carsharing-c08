@@ -1,0 +1,53 @@
+[
+  {
+    "requests": 20,
+    "accepted": 20,
+    "final": {
+      "done": 5,
+      "rejected": 15,
+      "failed": 0
+    },
+    "zone": {
+      "zone": "test-unprotected",
+      "cars_total": 5,
+      "rented": 5,
+      "effects": 5,
+      "free": 0,
+      "invariant_ok": true
+    }
+  },
+  {
+    "requests": 20,
+    "accepted": 20,
+    "final": {
+      "done": 7,
+      "rejected": 13,
+      "failed": 0
+    },
+    "zone": {
+      "zone": "test-unprotected",
+      "cars_total": 5,
+      "rented": 5,
+      "effects": 7,
+      "free": 0,
+      "invariant_ok": false
+    }
+  },
+  {
+    "requests": 20,
+    "accepted": 20,
+    "final": {
+      "done": 7,
+      "rejected": 13,
+      "failed": 0
+    },
+    "zone": {
+      "zone": "test-unprotected",
+      "cars_total": 5,
+      "rented": 5,
+      "effects": 7,
+      "free": 0,
+      "invariant_ok": false
+    }
+  }
+]

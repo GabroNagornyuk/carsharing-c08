@@ -1,0 +1,384 @@
+# Контракт сервісу api частини DPC, C08 «Каршеринг». Маршрути додаються з кожною ЛР; зараз – ЛР1.
+# x-course для засобу check: receiver, request-state, resource-state. "{uuid}" – новий id у кожному запиті.
+openapi: 3.1.0
+info:
+  title: Каршеринг – платформа оренд (DPC)
+  version: 1.0.0
+  description: |
+    Сервіс приймає команди старту оренди в обмежену чергу; пул обробників перевіряє посвідчення
+    водія (повільний виклик 300–900 мс) і змінює ресурс зони `zone_cars`, зберігаючи інваріант
+    «орендованих авто зони не більше, ніж є». Маршрути `/v1` потребують
+    `Authorization: Bearer <API_TOKEN>`. Помилки – Problem Details (RFC 9457).
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://localhost:8000
+security:
+  - apiToken: []
+
+tags:
+  - name: service
+    description: Службові маршрути
+  - name: rental-starts
+    description: Команди старту оренди та ресурс зони
+
+paths:
+  /health:
+    get:
+      tags:
+        - service
+      operationId: getHealth
+      summary: Перевірка працездатності процесу; швидка відповідь навіть за повної черги
+      security: []
+      responses:
+        "200":
+          description: Процес відповідає
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  instance:
+                    type: string
+  /metrics:
+    get:
+      tags:
+        - service
+      operationId: getMetrics
+      summary: Перцентилі часу відповіді HTTP, запити в обробці, довжина черги, відмови
+      security: []
+      responses:
+        "200":
+          description: Метрики
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  latency_ms:
+                    type: object
+                    description: Час відповіді HTTP маршрутів /v1 (останні 2000 запитів), не час виконання команди
+                    properties:
+                      p50:
+                        type:
+                          - number
+                          - "null"
+                      p95:
+                        type:
+                          - number
+                          - "null"
+                      p99:
+                        type:
+                          - number
+                          - "null"
+                  in_flight:
+                    type: integer
+                  queue_length:
+                    type: integer
+                  queue_capacity:
+                    type: integer
+                  workers:
+                    type: integer
+                  processing:
+                    type: integer
+                  rejected:
+                    type: integer
+                    description: 429 через повну чергу + відхилення за предметним правилом
+                  rejected_queue_full:
+                    type: integer
+                  responses:
+                    type: object
+  /metrics/prom:
+    get:
+      tags:
+        - service
+      operationId: getMetricsPrometheus
+      summary: Ті самі метрики у форматі Prometheus
+      security: []
+      responses:
+        "200":
+          description: Метрики
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /v1/rental-starts:
+    post:
+      tags:
+        - rental-starts
+      operationId: createRentalStart
+      summary: Прийняти команду старту оренди в обмежену чергу (202) або 429, якщо черга повна
+      description: |
+        Повтор з тим самим `command_id` і тими самими полями повертає поточний стан (200) без
+        другого запису; той самий `command_id` з іншими полями – 409.
+      x-course: receiver
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RentalStartCreate"
+            examples:
+              normal:
+                summary: Старт оренди в зоні навантажувальної перевірки
+                value:
+                  command_id: "r-{uuid}"
+                  car_id: car-lt-1
+                  driver_id: u-driver-1
+                  zone: loadtest
+              airport:
+                summary: Старт оренди в зоні аеропорту (10 авто)
+                value:
+                  command_id: "r-{uuid}"
+                  car_id: car-air-003
+                  driver_id: u-driver-2
+                  zone: airport
+              no-license:
+                summary: Посвідчення не підтверджено – кінцевий стан rejected
+                value:
+                  command_id: "r-{uuid}"
+                  car_id: car-air-004
+                  driver_id: nolicense-1
+                  zone: airport
+      responses:
+        "202":
+          description: Прийнято в чергу
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RentalStartState"
+        "200":
+          description: Повтор тієї самої команди – поточний стан
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RentalStartState"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /v1/rental-starts/{id}:
+    get:
+      tags:
+        - rental-starts
+      operationId: getRentalStart
+      summary: Стан команди старту оренди
+      x-course: request-state
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Стан
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RentalStartState"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/zone-cars/{id}:
+    get:
+      tags:
+        - rental-starts
+      operationId: getZoneCars
+      summary: Ресурс зони. Інваріант – rented дорівнює кількості ефектів і не більший за cars_total
+      x-course: resource-state
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: airport
+      responses:
+        "200":
+          description: Стан ресурсу
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ZoneCars"
+              example:
+                zone: airport
+                cars_total: 10
+                rented: 1
+                effects: 1
+                free: 9
+                invariant_ok: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    apiToken:
+      type: http
+      scheme: bearer
+  schemas:
+    Problem:
+      type: object
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+    RentalStartCreate:
+      type: object
+      additionalProperties: false
+      required:
+        - command_id
+        - car_id
+        - driver_id
+        - zone
+      properties:
+        command_id:
+          type: string
+          description: "Ключ предметного ефекту; у спільному проєкті дорівнює rental_id частини Web. Символи: A-Z a-z 0-9 . _ : -"
+          maxLength: 128
+        car_id:
+          type: string
+        driver_id:
+          type: string
+        zone:
+          type: string
+    RentalStartState:
+      type: object
+      required:
+        - id
+        - command_id
+        - zone
+        - state
+      properties:
+        id:
+          type: string
+        command_id:
+          type: string
+        car_id:
+          type: string
+        driver_id:
+          type: string
+        zone:
+          type: string
+        state:
+          type: string
+          enum:
+            - queued
+            - processing
+            - done
+            - rejected
+            - failed
+        reason:
+          type:
+            - string
+            - "null"
+          description: "rejected: no free cars in zone | driver license not confirmed; failed: помилка обробки"
+        arrived_at:
+          type: string
+          format: date-time
+        started_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        finished_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+    ZoneCars:
+      type: object
+      required:
+        - zone
+        - cars_total
+        - rented
+        - effects
+        - invariant_ok
+      properties:
+        zone:
+          type: string
+        cars_total:
+          type: integer
+        rented:
+          type: integer
+        effects:
+          type: integer
+          description: Кількість записаних ефектів «старт оренди» зони
+        free:
+          type: integer
+        invariant_ok:
+          type: boolean
+  responses:
+    BadRequest:
+      description: Пошкоджений JSON
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthorized:
+      description: Потрібен токен API
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Не знайдено
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: command_id уже використано з іншими полями
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unprocessable:
+      description: Неправильні дані або невідома зона
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    TooManyRequests:
+      description: Черга повна, запит не прийнято
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"

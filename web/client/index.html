@@ -1,0 +1,115 @@
+<!doctype html>
+<!-- Клієнт C08 «Каршеринг» (ЛР1): вибір зони, вільні авто, бронювання, результат або Problem Details.
+     Запуск з кореня репозиторію: python -m http.server 8081 --bind 127.0.0.1 --directory web/client -->
+<html lang="uk">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Каршеринг</title>
+    <style>
+        body { font: 15px/1.5 system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; }
+        fieldset { margin-bottom: 1.25rem; border: 1px solid #ccc; }
+        label { margin-right: 1rem; }
+        select, button { font: inherit; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid #eee; }
+        .card { padding: .75rem 1rem; border-radius: 6px; margin-top: 1rem; }
+        .ok { background: #eef8ee; border: 1px solid #9c9; }
+        .problem { background: #fdeeee; border: 1px solid #d99; }
+        code { font-family: ui-monospace, monospace; }
+        .muted { color: #666; }
+    </style>
+</head>
+<body>
+<h1>Каршеринг</h1>
+
+<fieldset>
+    <legend>Хто я (до ЛР3 – заголовок X-User-Id)</legend>
+    <label>Користувач
+        <select id="user">
+            <option value="u-driver-1">Олена Коваль (водій)</option>
+            <option value="u-driver-2">Максим Бондар (водій)</option>
+            <option value="u-operator">Оператор Ірина (персонал)</option>
+        </select>
+    </label>
+</fieldset>
+
+<fieldset>
+    <legend>Вільні автомобілі</legend>
+    <label>Зона
+        <select id="zone">
+            <option value="airport">Аеропорт</option>
+            <option value="center">Центр</option>
+            <option value="podil">Поділ</option>
+        </select>
+    </label>
+    <button id="refresh">Оновити</button>
+    <table>
+        <thead><tr><th>Авто</th><th>Клас</th><th>Заряд</th><th>Тариф</th><th></th></tr></thead>
+        <tbody id="cars"><tr><td colspan="5" class="muted">—</td></tr></tbody>
+    </table>
+    <p class="muted">Перевірка помилок: <button id="book-missing">забронювати неіснуюче авто</button>
+        <button id="book-service">авто на обслуговуванні</button></p>
+</fieldset>
+
+<div id="result"></div>
+
+<script type="module">
+    import {call, getUser, kyivTime, money, Problem, setUser} from "./api.js";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"})[c]);
+
+    $("user").value = getUser();
+    $("user").onchange = () => { setUser($("user").value); loadCars(); };
+    $("zone").onchange = loadCars;
+    $("refresh").onclick = loadCars;
+    $("book-missing").onclick = () => book("no-such-car");
+    $("book-service").onclick = () => book("car-pod-004");
+
+    function showProblem(error) {
+        if (!(error instanceof Problem)) {
+            $("result").innerHTML = `<div class="card problem">Мережа: ${esc(error.message)}</div>`;
+            return;
+        }
+        const p = error.body ?? {};
+        const fields = (p.errors ?? []).map((e) => `<li><code>${esc(e.field)}</code>: ${esc(e.message)}</li>`).join("");
+        $("result").innerHTML = `<div class="card problem">
+            <b>${esc(error.status)} · ${esc(p.title)}</b><br>${esc(p.detail)}
+            ${fields ? `<ul>${fields}</ul>` : ""}
+            <div class="muted"><code>${esc(p.type)}</code></div></div>`;
+    }
+
+    async function loadCars() {
+        try {
+            const {data} = await call("GET", `/v1/cars?zone=${encodeURIComponent($("zone").value)}`);
+            const rows = (data.items ?? []).map((c) => `<tr>
+                <td>${esc(c.plate)} <span class="muted">${esc(c.id)}</span></td>
+                <td>${esc(c.class)}</td><td>${esc(c.charge_pct)} %</td>
+                <td>${money(c.tariff.per_minute_minor, c.tariff.currency)}/хв · ${money(c.tariff.per_km_minor, c.tariff.currency)}/км</td>
+                <td><button data-car="${esc(c.id)}">Забронювати</button></td></tr>`);
+            $("cars").innerHTML = rows.join("") || `<tr><td colspan="5" class="muted">вільних авто немає</td></tr>`;
+            $("cars").querySelectorAll("button[data-car]").forEach((b) => (b.onclick = () => book(b.dataset.car)));
+        } catch (error) {
+            showProblem(error);
+        }
+    }
+
+    async function book(carId) {
+        try {
+            const {status, headers, data} = await call("POST", "/v1/rentals", {body: {car_id: carId}});
+            $("result").innerHTML = `<div class="card ok">
+                <b>${status} · Бронювання створено</b><br>
+                Авто <code>${esc(data.car_id)}</code>, стан <b>${esc(data.status)}</b><br>
+                Тримається до ${esc(kyivTime(data.expires_at))} (Київ)<br>
+                <span class="muted">Оренда <code>${esc(headers.get("location") ?? data.id)}</code></span></div>`;
+            loadCars();
+        } catch (error) {
+            showProblem(error);
+        }
+    }
+
+    loadCars();
+</script>
+</body>
+</html>

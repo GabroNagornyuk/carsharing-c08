@@ -1,0 +1,412 @@
+# Контракт частини Web, C08 «Каршеринг». Маршрути додаються з кожною ЛР; зараз – ЛР1.
+# x-course позначає роль маршруту для засобу check: main, object, list.
+# Приклади запитів посилаються на демодані migrations/900_seed.sql.
+openapi: 3.1.0
+info:
+  title: Каршеринг – Web API
+  version: 1.0.0
+  description: |
+    Водій бронює автомобіль на 15 хвилин (held), далі – розблокування, поїздка й завершення.
+    Помилки – Problem Details (RFC 9457, `application/problem+json`). Ідентифікатори – рядки.
+    Гроші – ціле число копійок і валюта. Час – RFC 3339 із зоною.
+    До ЛР3 користувача визначає заголовок `X-User-Id` (заздалегідь створений користувач).
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://localhost:8080
+security:
+  - userId: []
+
+tags:
+  - name: service
+    description: Службові маршрути
+  - name: cars
+    description: Автомобілі
+  - name: rentals
+    description: Оренди (бронювання авто)
+
+paths:
+  /health:
+    get:
+      tags:
+        - service
+      operationId: getHealth
+      summary: Перевірка живучості процесу, без звернення до бази
+      security: []
+      responses:
+        "200":
+          description: Процес відповідає
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  instance:
+                    type: string
+              example:
+                status: ok
+                instance: app-a
+
+  /v1/cars:
+    get:
+      tags:
+        - cars
+      operationId: listFreeCars
+      summary: Вільні автомобілі зони (не на обслуговуванні й без незавершеної оренди)
+      parameters:
+        - name: zone
+          in: query
+          required: true
+          schema:
+            type: string
+          example: airport
+      responses:
+        "200":
+          description: Вільні автомобілі
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - zone
+                  - items
+                properties:
+                  zone:
+                    type: string
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Car"
+              example:
+                zone: airport
+                items:
+                  - id: car-air-002
+                    zone: airport
+                    plate: AA0102KB
+                    class: business
+                    charge_pct: 54
+                    status: available
+                    tariff:
+                      per_minute_minor: 990
+                      per_km_minor: 600
+                      currency: UAH
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+
+  /v1/rentals:
+    post:
+      tags:
+        - rentals
+      operationId: createRental
+      summary: Забронювати автомобіль на 15 хвилин (головна операція)
+      description: |
+        В одній транзакції: блокування рядка авто, перевірка «не на обслуговуванні» і «немає
+        іншої незавершеної оренди», запис оренди в стані held. 201 надсилається після фіксації.
+      x-course: main
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RentalCreate"
+            examples:
+              normal:
+                summary: Вільний автомобіль
+                value:
+                  car_id: car-cen-001
+              scarce:
+                summary: Один автомобіль – для досліду гонки (успіх лише один)
+                value:
+                  car_id: car-air-010
+                x-capacity: 1
+              missing:
+                summary: Такого автомобіля немає – 404
+                value:
+                  car_id: no-such-car
+              in-service:
+                summary: Автомобіль на обслуговуванні – 409
+                value:
+                  car_id: car-pod-004
+      responses:
+        "201":
+          description: Бронювання створено
+          headers:
+            Location:
+              description: Адреса створеної оренди
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rental"
+              example:
+                id: 690eb3a7-cea6-4658-9fe3-6a7c8cbc7e71
+                car_id: car-cen-001
+                status: held
+                version: 1
+                created_at: "2026-11-13T15:54:15.731370+00:00"
+                expires_at: "2026-11-13T16:09:15.731370+00:00"
+                started_at: null
+                finished_at: null
+                km: null
+                amount: null
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+
+  /v1/rentals/{id}:
+    get:
+      tags:
+        - rentals
+      operationId: getRental
+      summary: Одна оренда поточного користувача (чужа – 404)
+      x-course: object
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Оренда
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rental"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    userId:
+      type: apiKey
+      in: header
+      name: X-User-Id
+      description: "До ЛР3: ідентифікатор користувача з демоданих (u-driver-1, u-driver-2, u-operator)"
+
+  schemas:
+    Problem:
+      type: object
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+    Money:
+      type: object
+      required:
+        - amount_minor
+        - currency
+      properties:
+        amount_minor:
+          type: integer
+          description: Сума в копійках
+        currency:
+          type: string
+          examples:
+            - UAH
+    Car:
+      type: object
+      required:
+        - id
+        - zone
+        - class
+        - charge_pct
+        - status
+        - tariff
+      properties:
+        id:
+          type: string
+        zone:
+          type: string
+        plate:
+          type: string
+        class:
+          type: string
+          enum:
+            - economy
+            - comfort
+            - business
+        charge_pct:
+          type: integer
+          minimum: 0
+          maximum: 100
+        status:
+          type: string
+          enum:
+            - available
+            - service
+        tariff:
+          type: object
+          required:
+            - per_minute_minor
+            - per_km_minor
+            - currency
+          properties:
+            per_minute_minor:
+              type: integer
+              description: Копійки за хвилину
+            per_km_minor:
+              type: integer
+              description: Копійки за кілометр
+            currency:
+              type: string
+    RentalCreate:
+      type: object
+      additionalProperties: false
+      required:
+        - car_id
+      properties:
+        car_id:
+          type: string
+          minLength: 1
+          maxLength: 64
+    Rental:
+      type: object
+      required:
+        - id
+        - car_id
+        - status
+        - version
+        - created_at
+        - expires_at
+      properties:
+        id:
+          type: string
+          description: rental_id – спільний із DPC (command_id старту оренди)
+        car_id:
+          type: string
+        status:
+          type: string
+          enum:
+            - held
+            - active
+            - finished
+            - expired
+            - cancelled
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          description: Кінець бронювання; почати оренду можна лише до цього моменту
+        started_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        finished_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        km:
+          type:
+            - integer
+            - "null"
+        amount:
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+
+  responses:
+    BadRequest:
+      description: Пошкоджений JSON
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://example.edu/problems/malformed-json
+            title: Request body is not valid JSON
+            status: 400
+            instance: /v1/rentals
+    Unauthorized:
+      description: Немає або невідомий X-User-Id
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://example.edu/problems/unauthenticated
+            title: X-User-Id header required
+            status: 401
+            instance: /v1/rentals
+    NotFound:
+      description: Ресурсу немає (або чужа оренда)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://example.edu/problems/car-not-found
+            title: Car not found
+            status: 404
+            detail: car 'no-such-car' does not exist
+            instance: /v1/rentals
+    Conflict:
+      description: Автомобіль уже в незавершеній оренді (car-busy) або на обслуговуванні (car-in-service)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://example.edu/problems/car-busy
+            title: Car is already rented
+            status: 409
+            detail: the car is in another active rental
+            instance: /v1/rentals
+    Unprocessable:
+      description: Неправильні дані
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://example.edu/problems/invalid-request
+            title: Invalid request data
+            status: 422
+            instance: /v1/rentals
+            errors:
+              - field: body.car_id
+                message: Field required

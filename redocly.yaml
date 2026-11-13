@@ -1,0 +1,6 @@
+# Лінтер контрактів: npx @redocly/cli@1.34.5 lint web/openapi.yaml dpc/openapi.yaml
+extends:
+  - recommended
+rules:
+  no-server-example.com: off    # localhost – справжня адреса стенда
+  operation-4xx-response: off   # службові /health і /metrics не мають помилок клієнта

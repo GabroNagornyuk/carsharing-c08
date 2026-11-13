@@ -1,0 +1,42 @@
+# Налаштування засобу check для спільного проєкту (шаблон – web/joint/checks-template.yaml).
+# Ядро перевіряється завжди; в items – лише виконані пункти поза ядром.
+web:
+  openapi: web/openapi.yaml
+  base: http://localhost:8080
+  items:
+    - О1.6   # система, /health, X-Request-ID, журнал JSON
+  role_names:
+    user: user
+    staff: staff
+  instances:
+    app-a: "http://localhost:8001"
+    app-b: "http://localhost:8002"
+  services:
+    nginx: nginx
+    app-a: app-a
+    app-b: app-b
+    postgres: postgres
+  log_fields:
+    time: time
+    instance: instance
+    route: route
+    status: status
+    duration: duration_ms
+
+dpc:
+  openapi: dpc/openapi.yaml
+  base: http://localhost:8000
+  items: []
+  services:
+    api: api
+  load_s: 10
+  resource:
+    path: /v1/zone-cars/loadtest
+    ok_field: invariant_ok
+  metrics:
+    - queue_length
+    - in_flight
+    - rejected
+
+# Наскрізний сценарій з'явиться з ЛР4 Web (розблокування передає команду старту оренди в DPC).
+scenario: []
