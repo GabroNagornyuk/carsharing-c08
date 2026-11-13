@@ -1,6 +1,6 @@
 # C08 Каршеринг – спільний запуск частин Web і DPC. З кореня репозиторію:
 #   docker compose up -d --build
-# Сервіси додаються лабораторна за лабораторною; зараз – ЛР1 обох курсів.
+# Сервіси додаються лабораторна за лабораторною; зараз – ЛР1 і ЛР2 обох курсів.
 
 x-web-server: &web-server
   build: ./web/server
@@ -10,6 +10,8 @@ x-web-server: &web-server
     CLIENT_ORIGIN: "${WEB_CLIENT_ORIGIN:-http://localhost:8081,http://127.0.0.1:8081}"
     POOL_SIZE: ${POOL_SIZE:-10}
     HOLD_MINUTES: ${HOLD_MINUTES:-15}
+    IDEMPOTENCY_TTL_H: ${IDEMPOTENCY_TTL_H:-24}
+    IDEMPOTENCY_CLEANUP_S: ${IDEMPOTENCY_CLEANUP_S:-60}
     FAULTS: "on"
   depends_on:
     migrate:
@@ -91,6 +93,8 @@ services:
       WORKERS: ${WORKERS:-4}
       RESOURCE_MODE: ${RESOURCE_MODE:-locked}
       LICENSE_CHECK_MS: ${LICENSE_CHECK_MS:-300-900}
+      COMPUTE_POOL: ${COMPUTE_POOL:-fresh}
+      COMPUTE_TOLERANCE: ${COMPUTE_TOLERANCE:-1e-6}
       FAULTS: "on"
     ports:
       - "${API_PORT:-8000}:8000"

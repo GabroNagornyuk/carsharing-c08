@@ -3,7 +3,8 @@
 Lab 1 (C08): cars.py (free cars of a zone), rentals.py (main operation POST /v1/rentals),
 users.py (X-User-Id until lab 3). Places for the next labs:
   TODO (O1.5)       list of rentals with a cursor (optional item)
-  TODO (O2.1-O2.3)  invariant under concurrency, idempotency keys, fault("after_commit_before_response")
+  Lab 2 (C08): idempotency.py (Idempotency-Key, one transaction with the rental,
+                    fault("after_commit_before_response")), cleanup of expired keys
   TODO (O3.1-O3.3)  login and logout, access to objects, staff function, CORS for CLIENT_ORIGIN
   TODO (O4.1-O4.4)  long operation, outbox in the same transaction (publisher and handler are
                     separate processes: app/publisher.py, app/worker.py)
@@ -12,22 +13,26 @@ users.py (X-User-Id until lab 3). Places for the next labs:
 The contract of all routes is your openapi.yaml (start from openapi.example.yaml).
 """
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import cache, cars, config, db, metrics, middleware, problems, rentals, service, telemetry
+from . import cache, cars, config, db, idempotency, metrics, middleware, problems, rentals, service, telemetry
 from .jsonlog import log
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await db.open_pool()
+    cleanup = asyncio.create_task(idempotency.cleanup_loop())
 
     log("app.started")
     yield
+
+    cleanup.cancel()
 
     await cache.close()
     await db.close_pool()
@@ -50,5 +55,5 @@ app.add_middleware(
     allow_origins=config.CLIENT_ORIGINS,
     allow_methods=["GET", "POST", "PATCH"],
     allow_headers=["Content-Type", "X-User-Id", "Idempotency-Key", "If-Match"],
-    expose_headers=["Location", "ETag", "X-Request-ID", "X-Instance"],
+    expose_headers=["Location", "ETag", "X-Request-ID", "X-Instance", "Retry-After", "Idempotent-Replayed", "X-Already-Cancelled"],
 )

@@ -1,0 +1,82 @@
+{
+  "experiment": "web-o2.1-race",
+  "clients": 20,
+  "rounds": [
+    {
+      "car": "car-air-001",
+      "codes": {
+        "409": 19,
+        "201": 1
+      },
+      "by_instance": {
+        "app-a:409": 10,
+        "app-b:409": 9,
+        "app-b:201": 1
+      },
+      "open_rentals_in_db": 1,
+      "car_still_listed_free": false,
+      "ok": true
+    },
+    {
+      "car": "car-air-002",
+      "codes": {
+        "409": 19,
+        "201": 1
+      },
+      "by_instance": {
+        "app-a:409": 9,
+        "app-b:409": 10,
+        "app-a:201": 1
+      },
+      "open_rentals_in_db": 1,
+      "car_still_listed_free": false,
+      "ok": true
+    },
+    {
+      "car": "car-air-003",
+      "codes": {
+        "409": 19,
+        "201": 1
+      },
+      "by_instance": {
+        "app-a:409": 10,
+        "app-b:409": 9,
+        "app-b:201": 1
+      },
+      "open_rentals_in_db": 1,
+      "car_still_listed_free": false,
+      "ok": true
+    },
+    {
+      "car": "car-air-004",
+      "codes": {
+        "409": 19,
+        "201": 1
+      },
+      "by_instance": {
+        "app-a:409": 9,
+        "app-b:409": 10,
+        "app-a:201": 1
+      },
+      "open_rentals_in_db": 1,
+      "car_still_listed_free": false,
+      "ok": true
+    },
+    {
+      "car": "car-air-005",
+      "codes": {
+        "409": 19,
+        "201": 1
+      },
+      "by_instance": {
+        "app-a:409": 9,
+        "app-b:409": 10,
+        "app-a:201": 1
+      },
+      "open_rentals_in_db": 1,
+      "car_still_listed_free": false,
+      "ok": true
+    }
+  ],
+  "violations": 0
+}

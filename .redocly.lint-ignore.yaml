@@ -1,0 +1,8 @@
+# Навмисні винятки лінтера: приклад forbidden у PATCH /v1/rentals/{id} має НЕ відповідати схемі –
+# засіб check надсилає його й чекає 422 (див. web/docs/CHECKS.md).
+web/openapi.yaml:
+  no-invalid-media-type-examples:
+    - >-
+      #/paths/~1v1~1rentals~1{id}/patch/requestBody/content/application~1json/examples/forbidden/value
+    - >-
+      #/paths/~1v1~1rentals~1{id}/patch/requestBody/content/application~1json/examples/forbidden/value/status

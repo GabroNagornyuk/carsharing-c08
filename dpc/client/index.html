@@ -1,5 +1,6 @@
 <!doctype html>
-<!-- Клієнт платформи оренд C08 (DPC): команда старту оренди, очікування кінцевого стану, ресурс зони.
+<!-- Клієнт платформи оренд C08 (DPC): команда старту оренди, очікування кінцевого стану, ресурс зони,
+     розрахунок ЛР2 для 1, 2 і 4 процесів.
      Запуск з кореня репозиторію: python -m http.server 8083 --bind 127.0.0.1 --directory dpc/client -->
 <html lang="uk">
 <head>
@@ -80,6 +81,20 @@
     </fieldset>
 
     <fieldset>
+        <legend>Розрахунок ЛР2: машино-години n(t) = N(1 − e^(−t/τ)) на [a; b]</legend>
+        <form id="compute-form">
+            <label>a, год від 6:00 <input name="a" type="number" step="any" value="0"></label>
+            <label>b, год від 6:00 <input name="b" type="number" step="any" value="12"></label>
+            <label>n – кількість частин <input name="n" type="number" value="20000000"></label>
+            <label>Метод <select name="method"><option>midpoint</option><option>trapezoid</option><option>simpson</option></select></label>
+            <label>Сумування <select name="summation"><option>naive</option><option>pairwise</option><option>kahan</option></select></label>
+            <label>Спільна сума <select name="mode"><option>local</option><option>lock</option><option>none</option></select></label>
+            <button>Порахувати для 1, 2 і 4 процесів</button>
+        </form>
+        <table id="compute-table"></table>
+    </fieldset>
+
+    <fieldset>
         <legend>Читання</legend>
         <button data-path="/v1/zone-cars/airport">Зона «аеропорт»</button>
         <button data-path="/v1/zone-cars/loadtest">Зона loadtest</button>
@@ -126,6 +141,29 @@
                     });
                     show({final: location, body: final});
                 }
+            } catch (error) {
+                report(error);
+            }
+        };
+
+        document.getElementById("compute-form").onsubmit = async (event) => {
+            event.preventDefault();
+            const f = Object.fromEntries(new FormData(event.target));
+            const table = document.getElementById("compute-table");
+            const rows = ["<tr><th>p</th><th>значення</th><th>еталон</th><th>відн. похибка</th><th>у допуску</th><th>час, с</th><th>S_p</th></tr>"];
+            let t1 = null;
+            try {
+                for (const workers of [1, 2, 4]) {
+                    table.innerHTML = rows.join("") + `<tr><td colspan="7">рахується p = ${workers}…</td></tr>`;
+                    const body = {a: +f.a, b: +f.b, n: +f.n, workers, method: f.method, summation: f.summation, mode: f.mode};
+                    const r = (await call("POST", "/v1/compute", {body})).data.result;
+                    t1 ??= r.wall_s;
+                    rows.push(`<tr><td>${workers}</td><td>${r.value.toFixed(9)}</td><td>${r.reference.toFixed(9)}</td>
+                        <td>${r.rel_error.toExponential(2)}</td><td>${r.within_tolerance ? "так" : "НІ"}</td>
+                        <td>${r.wall_s.toFixed(3)}</td><td>${(t1 / r.wall_s).toFixed(2)}</td></tr>`);
+                    show(r);
+                }
+                table.innerHTML = rows.join("");
             } catch (error) {
                 report(error);
             }

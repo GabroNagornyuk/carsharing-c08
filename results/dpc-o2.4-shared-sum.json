@@ -1,0 +1,98 @@
+{
+  "experiment": "dpc-o2.4-shared-sum",
+  "n": 400000,
+  "workers": 4,
+  "portion": 1,
+  "rows": [
+    {
+      "mode": "none",
+      "run": 1,
+      "value": 75.46466892733115,
+      "reference": 105.00503193941853,
+      "rel_error": 0.28132330866896327,
+      "within_tolerance": false,
+      "lost_value": 29.5403630123371,
+      "wall_s": 0.0807414759999574
+    },
+    {
+      "mode": "none",
+      "run": 2,
+      "value": 77.94302583017037,
+      "reference": 105.00503193941853,
+      "rel_error": 0.25772104069128116,
+      "within_tolerance": false,
+      "lost_value": 27.062006109497872,
+      "wall_s": 0.11955517100000179
+    },
+    {
+      "mode": "none",
+      "run": 3,
+      "value": 78.39612168474525,
+      "reference": 105.00503193941853,
+      "rel_error": 0.2534060488646391,
+      "within_tolerance": false,
+      "lost_value": 26.60891025492298,
+      "wall_s": 0.10162515599995459
+    },
+    {
+      "mode": "lock",
+      "run": 1,
+      "value": 105.005031939667,
+      "reference": 105.00503193941853,
+      "rel_error": 2.3663322614735543e-12,
+      "within_tolerance": true,
+      "lost_value": 1.2293457984924316e-12,
+      "wall_s": 0.5598313160000998
+    },
+    {
+      "mode": "lock",
+      "run": 2,
+      "value": 105.00503193966603,
+      "reference": 105.00503193941853,
+      "rel_error": 2.3569941473161806e-12,
+      "within_tolerance": true,
+      "lost_value": 2.2072345018386842e-12,
+      "wall_s": 0.6048176620000731
+    },
+    {
+      "mode": "lock",
+      "run": 3,
+      "value": 105.00503193966658,
+      "reference": 105.00503193941853,
+      "rel_error": 2.3622722118399134e-12,
+      "within_tolerance": true,
+      "lost_value": 1.6624107956886293e-12,
+      "wall_s": 0.6241760049999812
+    },
+    {
+      "mode": "local",
+      "run": 1,
+      "value": 105.00503193966833,
+      "reference": 105.00503193941853,
+      "rel_error": 2.3789184153378402e-12,
+      "within_tolerance": true,
+      "lost_value": null,
+      "wall_s": 0.03318163699998422
+    },
+    {
+      "mode": "local",
+      "run": 2,
+      "value": 105.00503193966833,
+      "reference": 105.00503193941853,
+      "rel_error": 2.3789184153378402e-12,
+      "within_tolerance": true,
+      "lost_value": null,
+      "wall_s": 0.026118368999959785
+    },
+    {
+      "mode": "local",
+      "run": 3,
+      "value": 105.00503193966833,
+      "reference": 105.00503193941853,
+      "rel_error": 2.3789184153378402e-12,
+      "within_tolerance": true,
+      "lost_value": null,
+      "wall_s": 0.028604836999988947
+    }
+  ]
+}
