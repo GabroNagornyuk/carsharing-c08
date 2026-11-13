@@ -27,6 +27,8 @@ FLAGS_URL = os.environ.get("FLAGS_URL", "http://localhost:8099")
 OIDC_ISSUER = os.environ.get("OIDC_ISSUER", "http://localhost:8180/realms/project")
 OIDC_INTERNAL_URL = os.environ.get("OIDC_INTERNAL_URL", OIDC_ISSUER)
 CLIENT_ORIGIN = os.environ.get("CLIENT_ORIGIN", "http://localhost:8081")
+# CORS: адреси клієнта через кому; localhost і 127.0.0.1 – різні Origin для браузера
+CLIENT_ORIGINS = [o.strip() for o in CLIENT_ORIGIN.split(",") if o.strip()]
 
 OTEL_ENABLED = os.environ.get("OTEL_ENABLED", "off") == "on"
 OTEL_ENDPOINT = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")

@@ -40,7 +40,7 @@ app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
 middleware.install(app)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[config.CLIENT_ORIGIN],
+    allow_origins=config.CLIENT_ORIGINS,
     allow_methods=["*"],
     allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
     expose_headers=["Location", "Retry-After", "X-Request-ID"],

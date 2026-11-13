@@ -7,7 +7,7 @@ x-web-server: &web-server
   image: carsharing-web:${APP_TAG:-dev}
   environment: &web-env
     DATABASE_URL: postgresql://app:app@postgres:5432/app
-    CLIENT_ORIGIN: ${WEB_CLIENT_ORIGIN:-http://localhost:8081}
+    CLIENT_ORIGIN: "${WEB_CLIENT_ORIGIN:-http://localhost:8081,http://127.0.0.1:8081}"
     POOL_SIZE: ${POOL_SIZE:-10}
     HOLD_MINUTES: ${HOLD_MINUTES:-15}
     FAULTS: "on"
@@ -86,7 +86,7 @@ services:
       INSTANCE: api
       DATABASE_URL: postgresql://app:app@postgres:5432/app
       API_TOKEN: ${API_TOKEN:-dev-token}
-      CLIENT_ORIGIN: ${DPC_CLIENT_ORIGIN:-http://localhost:8083}
+      CLIENT_ORIGIN: "${DPC_CLIENT_ORIGIN:-http://localhost:8083,http://127.0.0.1:8083}"
       QUEUE_CAPACITY: ${QUEUE_CAPACITY:-50}
       WORKERS: ${WORKERS:-4}
       RESOURCE_MODE: ${RESOURCE_MODE:-locked}

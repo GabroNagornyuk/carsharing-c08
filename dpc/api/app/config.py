@@ -21,6 +21,8 @@ STATEMENT_TIMEOUT_MS = _int("STATEMENT_TIMEOUT_MS", 5000)
 
 API_TOKEN = os.environ.get("API_TOKEN", "dev-token")
 CLIENT_ORIGIN = os.environ.get("CLIENT_ORIGIN", "http://localhost:8083")
+# CORS: адреси клієнта через кому; localhost і 127.0.0.1 – різні Origin для браузера
+CLIENT_ORIGINS = [o.strip() for o in CLIENT_ORIGIN.split(",") if o.strip()]
 
 RAY_ADDRESS = os.environ.get("RAY_ADDRESS", "ray://localhost:10001")
 RUNNER_URL = os.environ.get("RUNNER_URL", "http://localhost:8000")

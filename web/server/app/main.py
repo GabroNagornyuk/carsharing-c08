@@ -47,7 +47,7 @@ app.include_router(rentals.router)
 # Клієнт працює поза Compose на CLIENT_ORIGIN і звертається через nginx
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[config.CLIENT_ORIGIN],
+    allow_origins=config.CLIENT_ORIGINS,
     allow_methods=["GET", "POST", "PATCH"],
     allow_headers=["Content-Type", "X-User-Id", "Idempotency-Key", "If-Match"],
     expose_headers=["Location", "ETag", "X-Request-ID", "X-Instance"],
