@@ -1,13 +1,14 @@
-# Контракт сервісу api частини DPC, C08 «Каршеринг». Маршрути додаються з кожною ЛР; зараз – ЛР1 і ЛР2.
+# Контракт сервісу api частини DPC, C08 «Каршеринг». Маршрути додаються з кожною ЛР; зараз – ЛР1–ЛР3.
 # x-course для засобу check: receiver, request-state, resource-state. "{uuid}" – новий id у кожному запиті.
 openapi: 3.1.0
 info:
   title: Каршеринг – платформа оренд (DPC)
   version: 1.0.0
   description: |
-    Сервіс приймає команди старту оренди в обмежену чергу; пул обробників перевіряє посвідчення
-    водія (повільний виклик 300–900 мс) і змінює ресурс зони `zone_cars`, зберігаючи інваріант
-    «орендованих авто зони не більше, ніж є». Маршрути `/v1` потребують
+    Сервіс приймає команди старту оренди в обмежену чергу. З ЛР3 (EXECUTION=ray) команду виконує
+    задача Ray: вона перевіряє посвідчення водія (повільний виклик 300–900 мс) і доставляє результат
+    приймачу `POST /v1/rental-start-effects`, який змінює ресурс зони `zone_cars`, зберігаючи
+    інваріант «орендованих авто зони не більше, ніж є». Незавершених задач – не більше IN_FLIGHT_LIMIT. Маршрути `/v1` потребують
     `Authorization: Bearer <API_TOKEN>`. Помилки – Problem Details (RFC 9457).
   license:
     name: MIT
@@ -24,6 +25,8 @@ tags:
     description: Команди старту оренди та ресурс зони
   - name: compute
     description: Розрахунок ЛР2 – машино-години оренди
+  - name: effects
+    description: Приймач результатів задач Ray (ЛР3)
 
 paths:
   /health:
@@ -91,6 +94,16 @@ paths:
                     description: 429 через повну чергу + відхилення за предметним правилом
                   rejected_queue_full:
                     type: integer
+                  tasks_in_flight:
+                    type: integer
+                    description: ЛР3 – незавершені задачі Ray зараз (не більше tasks_in_flight_limit)
+                  tasks_in_flight_limit:
+                    type: integer
+                    description: IN_FLIGHT_LIMIT у режимі ray, 0 у режимі local
+                  tasks_max_in_flight:
+                    type: integer
+                  tasks_submitted:
+                    type: integer
                   responses:
                     type: object
   /metrics/prom:
@@ -117,7 +130,20 @@ paths:
       description: |
         Повтор з тим самим `command_id` і тими самими полями повертає поточний стан (200) без
         другого запису; той самий `command_id` з іншими полями – 409.
+
+        Д3.3: необов'язковий `Idempotency-Key`. Повтор з тим самим ключем і тілом повертає ту саму
+        команду (200, `Idempotent-Replayed: true`); з іншим тілом – 409 `idempotency-key-reused`;
+        одночасні дублікати – одне приймання.
       x-course: receiver
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+          example: k-6f1c2a9e-4b7d-4c1e-9a55-2d3f8b0e7c11
       requestBody:
         required: true
         content:
@@ -201,6 +227,94 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /v1/rental-start-effects:
+    post:
+      tags:
+        - effects
+      operationId: receiveRentalStartEffect
+      summary: Приймач результату задачі Ray – одна транзакція (захист від повтору, ресурс, рішення)
+      description: |
+        Викликає задача Ray (виконавець), а не клієнт. Ключ ефекту – `command_id`. Перша доставка
+        змінює `zone_cars`, пише рядок ефекту й рішення; повторна доставка того самого
+        `command_id` повертає збережене рішення (`replayed: true`) без предметної зміни.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - command_id
+                - license_ok
+                - executor
+              properties:
+                command_id:
+                  type: string
+                license_ok:
+                  type: boolean
+                  description: результат перевірки посвідчення у виконавці
+                executor:
+                  type: string
+                  description: вузол і pid процесу виконавця
+            example:
+              command_id: r-1
+              license_ok: true
+              executor: ray-worker@a1b2c3:412
+      responses:
+        "200":
+          description: Рішення (нове або збережене)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Decision"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+  /v1/rental-start-effects/{id}:
+    get:
+      tags:
+        - effects
+      operationId: getRentalStartDecision
+      summary: Рішення приймача, кількість доставок і підтвердження задачі
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Рішення
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Decision"
+                  - type: object
+                    properties:
+                      executor:
+                        type: string
+                      effects:
+                        type: integer
+                        description: рядків ефекту для цієї команди (0 або 1)
+                      acked_at:
+                        type:
+                          - string
+                          - "null"
+                        format: date-time
+                      acked_by:
+                        type:
+                          - string
+                          - "null"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /v1/zone-cars/{id}:
     get:
       tags:
@@ -313,6 +427,29 @@ components:
       type: http
       scheme: bearer
   schemas:
+    Decision:
+      type: object
+      required:
+        - command_id
+        - decision
+        - deliveries
+      properties:
+        command_id:
+          type: string
+        decision:
+          type: string
+          enum:
+            - done
+            - rejected
+        reason:
+          type:
+            - string
+            - "null"
+        deliveries:
+          type: integer
+          description: скільки разів ефект доставляли (повтори задачі)
+        replayed:
+          type: boolean
     Problem:
       type: object
       required:

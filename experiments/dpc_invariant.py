@@ -14,6 +14,7 @@
 
 Очікування: unprotected – ефектів більше, ніж авто, і rented != effects (invariant_ok=false);
 locked – рівно cars_total стартів done, решта rejected, invariant_ok=true.
+ЛР3: те саме із задачами Ray (EXECUTION=ray) – мітка --label ray; ресурс змінює приймач.
 """
 
 import argparse
@@ -36,6 +37,10 @@ def reset() -> None:
         conn.execute(
             "DELETE FROM rental_start_effect WHERE zone_id = %s", (ZONE,)
         )
+        # ЛР3: рішення приймача й ключі ідемпотентності посилаються на rental_start
+        sub = "SELECT id FROM rental_start WHERE zone_id = %s"
+        conn.execute(f"DELETE FROM rental_start_decision WHERE command_id IN ({sub})", (ZONE,))
+        conn.execute(f"DELETE FROM dpc_idempotency_key WHERE command_id IN ({sub})", (ZONE,))
         conn.execute("DELETE FROM rental_start WHERE zone_id = %s", (ZONE,))
         conn.execute("UPDATE zone_cars SET rented = 0 WHERE zone_id = %s", (ZONE,))
 

@@ -1,7 +1,13 @@
-// Звернення до системи лише через nginx: адреса, X-User-Id (до ЛР3), Problem Details.
+// Звернення до системи лише через nginx: адреса, cookie сесії (ЛР3), Problem Details.
 // Клієнт працює поза Compose:  python -m http.server 8081 --bind 127.0.0.1 --directory web/client
+// і відкривається як http://localhost:8081 (або http://127.0.0.1:8081).
+//
+// ЛР3, О3.3 – де живе «токен». Сесія – cookie session з HttpOnly: JavaScript (і чужий скрипт
+// при XSS) його не читає й не зберігає в localStorage; браузер сам додає cookie до запитів з
+// credentials: "include". Адреса API береться з того самого хоста, що й сторінка: localhost:8081 →
+// localhost:8080, тоді клієнт і API – один «сайт», і cookie SameSite=Lax надсилається.
 
-export const API = globalThis.localStorage?.getItem("api") ?? "http://localhost:8080";
+export const API = globalThis.localStorage?.getItem("api") ?? `http://${globalThis.location?.hostname ?? "localhost"}:8080`;
 
 export class Problem extends Error {
     constructor(status, body) {
@@ -11,23 +17,15 @@ export class Problem extends Error {
     }
 }
 
-let userId = globalThis.sessionStorage?.getItem("userId") ?? "u-driver-1";
-
-export const getUser = () => userId;
-export function setUser(value) {
-    userId = value;
-    globalThis.sessionStorage?.setItem("userId", value);
-}
-
 export async function call(method, path, {body, headers = {}} = {}) {
     const reply = await fetch(API + path, {
         method,
         headers: {
             ...(body !== undefined ? {"Content-Type": "application/json"} : {}),
-            "X-User-Id": userId,
             ...headers,
         },
         body: body !== undefined ? JSON.stringify(body) : undefined,
+        credentials: "include",
     });
 
     const type = reply.headers.get("content-type") ?? "";
@@ -70,8 +68,9 @@ export async function mutate(method, path, body, {
         try {
             const reply = await fetchFn(API + path, {
                 method,
-                headers: {"Content-Type": "application/json", "X-User-Id": userId, "Idempotency-Key": key},
+                headers: {"Content-Type": "application/json", "Idempotency-Key": key},
                 body: JSON.stringify(body),
+                credentials: "include",
                 signal: AbortSignal.timeout(policy.timeoutMs),
             });
             const type = reply.headers.get("content-type") ?? "";
@@ -95,6 +94,19 @@ export async function mutate(method, path, body, {
         await sleep(delay);
     }
     throw new UnknownResult(key, policy.attempts, last);
+}
+
+// ---------------------------------------------------------------- ЛР3: вхід і вихід
+
+export const login = (login, password) => call("POST", "/v1/auth/login", {body: {login, password}});
+export const logout = () => call("POST", "/v1/auth/logout");
+export async function me() {
+    try {
+        return (await call("GET", "/v1/me")).data;
+    } catch (error) {
+        if (error instanceof Problem && error.status === 401) return null;  // не увійшов або сесія скінчилась
+        throw error;
+    }
 }
 
 // Гроші приходять цілими копійками; показуємо гривні без float-арифметики над сумою.

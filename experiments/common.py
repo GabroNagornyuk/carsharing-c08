@@ -8,8 +8,25 @@ DB = os.environ.get("DATABASE_URL", "postgresql://app:app@localhost:5432/app")
 DPC_AUTH = {"Authorization": f"Bearer {os.environ.get('API_TOKEN', 'dev-token')}"}
 
 
+# ЛР3 Web: замість X-User-Id – вхід і cookie сесії. user("u-driver-1") входить один раз за логіном
+# демоданих і повертає заголовок Cookie, тож сценарії ЛР1–ЛР2 працюють без змін.
+LOGINS = {"u-driver-1": "driver1", "u-driver-2": "driver2", "u-operator": "operator"}
+_sessions: dict[str, str] = {}
+
+
+def login(login_name: str, password: str | None = None, base: str | None = None) -> str:
+    """Вхід через POST /v1/auth/login; повертає токен сесії з cookie."""
+    import httpx
+
+    r = httpx.post(f"{base or WEB}/v1/auth/login", json={"login": login_name, "password": password or f"{login_name}-pass"})
+    r.raise_for_status()
+    return r.cookies["session"]
+
+
 def user(user_id: str) -> dict[str, str]:
-    return {"X-User-Id": user_id}
+    if user_id not in _sessions:
+        _sessions[user_id] = login(LOGINS[user_id])
+    return {"Cookie": f"session={_sessions[user_id]}"}
 
 
 def percentile(values: list[float], q: float) -> float:

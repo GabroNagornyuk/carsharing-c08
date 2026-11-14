@@ -1,6 +1,6 @@
 # C08 Каршеринг – спільний запуск частин Web і DPC. З кореня репозиторію:
 #   docker compose up -d --build
-# Сервіси додаються лабораторна за лабораторною; зараз – ЛР1 і ЛР2 обох курсів.
+# Сервіси додаються лабораторна за лабораторною; зараз – ЛР1–ЛР3 обох курсів.
 
 x-web-server: &web-server
   build: ./web/server
@@ -12,6 +12,9 @@ x-web-server: &web-server
     HOLD_MINUTES: ${HOLD_MINUTES:-15}
     IDEMPOTENCY_TTL_H: ${IDEMPOTENCY_TTL_H:-24}
     IDEMPOTENCY_CLEANUP_S: ${IDEMPOTENCY_CLEANUP_S:-60}
+    SESSION_TTL_MIN: ${SESSION_TTL_MIN:-60}
+    LOGIN_MAX_FAILURES: ${LOGIN_MAX_FAILURES:-5}
+    LOGIN_WINDOW_MIN: ${LOGIN_WINDOW_MIN:-15}
     FAULTS: "on"
   depends_on:
     migrate:
@@ -81,10 +84,12 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------- DPC
+  # Один образ для api, ray-head і ray-worker: версії Python і Ray у клієнті й на вузлах однакові,
+  # а вузли імпортують код задач (app/ray_tasks.py).
   api:
     build: ./dpc/api
     image: carsharing-dpc-api:${APP_TAG:-dev}
-    environment:
+    environment: &dpc-env
       INSTANCE: api
       DATABASE_URL: postgresql://app:app@postgres:5432/app
       API_TOKEN: ${API_TOKEN:-dev-token}
@@ -95,6 +100,12 @@ services:
       LICENSE_CHECK_MS: ${LICENSE_CHECK_MS:-300-900}
       COMPUTE_POOL: ${COMPUTE_POOL:-fresh}
       COMPUTE_TOLERANCE: ${COMPUTE_TOLERANCE:-1e-6}
+      # ЛР3: обробка команд старту в задачах Ray; local – пул обробників ЛР1 у процесі api
+      EXECUTION: ${EXECUTION:-ray}
+      RAY_ADDRESS: ray://ray-head:10001
+      RECEIVER_URL: http://api:8000
+      IN_FLIGHT_LIMIT: ${IN_FLIGHT_LIMIT:-8}
+      RAY_MAX_RETRIES: ${RAY_MAX_RETRIES:-3}
       FAULTS: "on"
     ports:
       - "${API_PORT:-8000}:8000"
@@ -104,6 +115,40 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      ray-head:
+        condition: service_started
+    restart: unless-stopped
+
+  ray-head:
+    build: ./dpc/api   # той самий образ, що й api (збирання з кешу)
+    image: carsharing-dpc-api:${APP_TAG:-dev}
+    command: ["ray", "start", "--head", "--port=6379", "--ray-client-server-port=10001",
+              "--dashboard-host=0.0.0.0", "--num-cpus=1", "--disable-usage-stats", "--block"]
+    environment:
+      <<: *dpc-env
+      INSTANCE: ray-head
+    ports:
+      - "${RAY_DASHBOARD_PORT:-8265}:8265"
+    volumes:
+      - faults:/faults   # керована відмова after_effect_before_ack спрацьовує у виконавці
+    shm_size: 1g
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  ray-worker:
+    build: ./dpc/api
+    image: carsharing-dpc-api:${APP_TAG:-dev}
+    command: ["ray", "start", "--address=ray-head:6379", "--num-cpus=2", "--disable-usage-stats", "--block"]
+    environment:
+      <<: *dpc-env
+      INSTANCE: ray-worker
+    volumes:
+      - faults:/faults
+    shm_size: 1g
+    depends_on:
+      - ray-head
     restart: unless-stopped
 
 volumes:

@@ -54,3 +54,8 @@ COMPUTE_TOLERANCE = _float("COMPUTE_TOLERANCE", 1e-6)  # відносна пох
 COMPUTE_POOL = os.environ.get("COMPUTE_POOL", "fresh")  # fresh – пул на кожен запит | warm – один пул на весь час роботи (О2.3)
 WARM_POOL_SIZE = _int("WARM_POOL_SIZE", 4)
 MP_START = os.environ.get("MP_START", "")  # спосіб запуску процесів: порожньо – типовий для платформи (Linux, Python 3.14 – forkserver)
+
+# ЛР3: задачі Ray (EXECUTION=ray). Виконавець доставляє результат приймачу – маршруту api.
+RECEIVER_URL = os.environ.get("RECEIVER_URL", "http://api:8000")
+RAY_MAX_RETRIES = _int("RAY_MAX_RETRIES", 3)
+RAY_TASK_CPUS = _float("RAY_TASK_CPUS", 0.25)  # задача здебільшого чекає, тож кілька на одне ядро

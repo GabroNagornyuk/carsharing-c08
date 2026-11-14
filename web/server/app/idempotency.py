@@ -30,7 +30,7 @@ from fastapi.responses import JSONResponse
 from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
-from . import config, db
+from . import config, db, users
 from .faults import fault
 from .jsonlog import log
 from .problems import MEDIA_TYPE, Problem
@@ -159,5 +159,8 @@ async def cleanup_loop() -> None:
                     break
             if total:
                 log("idempotency.cleanup", deleted=total)
+            # ЛР3: прострочені сесії й старі невдалі спроби входу – тим самим фоновим завданням
+            async with db.connection() as conn:
+                await users.cleanup(conn)
         except Exception as exc:  # noqa: BLE001 - прибирання не має зупиняти сервер
             log("idempotency.cleanup_failed", error=type(exc).__name__)

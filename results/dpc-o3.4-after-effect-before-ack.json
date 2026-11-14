@@ -1,0 +1,41 @@
+[
+  {
+    "command_id": "flt-ee3b874f",
+    "state": "done",
+    "seconds": 3.25,
+    "deliveries": 2,
+    "effects_of_command": 1,
+    "first_executor": "ray-head@vm:5129",
+    "acked_by": "ray-head@vm:5161",
+    "rented_before": 113,
+    "rented_after": 114,
+    "invariant_ok": true,
+    "fault_consumed": true
+  },
+  {
+    "command_id": "flt-7ff3c479",
+    "state": "done",
+    "seconds": 3.1,
+    "deliveries": 2,
+    "effects_of_command": 1,
+    "first_executor": "ray-head@vm:5161",
+    "acked_by": "ray-head@vm:5197",
+    "rented_before": 114,
+    "rented_after": 115,
+    "invariant_ok": true,
+    "fault_consumed": true
+  },
+  {
+    "command_id": "flt-0ca36ef5",
+    "state": "done",
+    "seconds": 1.81,
+    "deliveries": 2,
+    "effects_of_command": 1,
+    "first_executor": "ray-head@vm:5197",
+    "acked_by": "ray-head@vm:5232",
+    "rented_before": 115,
+    "rented_after": 116,
+    "invariant_ok": true,
+    "fault_consumed": true
+  }
+]
