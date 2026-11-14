@@ -1,0 +1,896 @@
+{
+  "requests": 100,
+  "accepted_202": 55,
+  "rejected_429": 45,
+  "in_flight_limit": 4,
+  "max_in_flight_seen": 4,
+  "max_in_flight_server": 4,
+  "max_queue": 50,
+  "submitted_after_1s": 4,
+  "submitted_after_5s": 11,
+  "submitted_total": 32,
+  "samples": [
+    {
+      "t": 0.03,
+      "in_flight": 0,
+      "submitted": 0,
+      "queue": 0
+    },
+    {
+      "t": 0.38,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 30
+    },
+    {
+      "t": 0.49,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 0.59,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 0.69,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 0.8,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 0.9,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 1.01,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 1.11,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 1.21,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 1.32,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 1.42,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 1.53,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 1.63,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 1.73,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 1.84,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 1.94,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 2.05,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 2.15,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 2.25,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 2.36,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 2.46,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 2.57,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 2.67,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 2.77,
+      "in_flight": 4,
+      "submitted": 4,
+      "queue": 50
+    },
+    {
+      "t": 2.88,
+      "in_flight": 4,
+      "submitted": 5,
+      "queue": 49
+    },
+    {
+      "t": 2.98,
+      "in_flight": 4,
+      "submitted": 6,
+      "queue": 48
+    },
+    {
+      "t": 3.08,
+      "in_flight": 4,
+      "submitted": 7,
+      "queue": 47
+    },
+    {
+      "t": 3.19,
+      "in_flight": 4,
+      "submitted": 7,
+      "queue": 47
+    },
+    {
+      "t": 3.29,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 3.4,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 3.5,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 3.61,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 3.71,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 3.81,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 3.92,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 4.02,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 4.13,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 4.23,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 4.33,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 4.44,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 4.54,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 4.65,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 4.75,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 4.85,
+      "in_flight": 4,
+      "submitted": 8,
+      "queue": 46
+    },
+    {
+      "t": 4.96,
+      "in_flight": 4,
+      "submitted": 9,
+      "queue": 45
+    },
+    {
+      "t": 5.06,
+      "in_flight": 4,
+      "submitted": 11,
+      "queue": 43
+    },
+    {
+      "t": 5.17,
+      "in_flight": 4,
+      "submitted": 11,
+      "queue": 43
+    },
+    {
+      "t": 5.27,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 5.38,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 5.48,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 5.58,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 5.69,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 5.79,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 5.9,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 6.0,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 6.1,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 6.21,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 6.31,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 6.42,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 6.52,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 6.62,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 6.73,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 6.83,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 6.93,
+      "in_flight": 4,
+      "submitted": 12,
+      "queue": 42
+    },
+    {
+      "t": 7.04,
+      "in_flight": 4,
+      "submitted": 13,
+      "queue": 40
+    },
+    {
+      "t": 7.14,
+      "in_flight": 4,
+      "submitted": 15,
+      "queue": 39
+    },
+    {
+      "t": 7.25,
+      "in_flight": 4,
+      "submitted": 15,
+      "queue": 39
+    },
+    {
+      "t": 7.35,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 7.45,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 7.56,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 7.66,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 7.76,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 7.87,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 7.97,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 8.07,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 8.18,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 8.28,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 8.38,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 8.49,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 8.59,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 8.69,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 8.8,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 8.9,
+      "in_flight": 4,
+      "submitted": 16,
+      "queue": 38
+    },
+    {
+      "t": 9.0,
+      "in_flight": 4,
+      "submitted": 17,
+      "queue": 37
+    },
+    {
+      "t": 9.11,
+      "in_flight": 4,
+      "submitted": 19,
+      "queue": 35
+    },
+    {
+      "t": 9.21,
+      "in_flight": 4,
+      "submitted": 19,
+      "queue": 35
+    },
+    {
+      "t": 9.32,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 9.42,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 9.52,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 9.63,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 9.73,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 9.83,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 9.94,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 10.04,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 10.14,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 10.25,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 10.35,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 10.46,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 10.56,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 10.66,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 10.77,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 10.87,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 10.97,
+      "in_flight": 4,
+      "submitted": 20,
+      "queue": 34
+    },
+    {
+      "t": 11.08,
+      "in_flight": 4,
+      "submitted": 21,
+      "queue": 33
+    },
+    {
+      "t": 11.18,
+      "in_flight": 4,
+      "submitted": 23,
+      "queue": 31
+    },
+    {
+      "t": 11.29,
+      "in_flight": 4,
+      "submitted": 23,
+      "queue": 31
+    },
+    {
+      "t": 11.39,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 11.49,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 11.6,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 11.7,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 11.8,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 11.91,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 12.01,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 12.12,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 12.22,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 12.32,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 12.43,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 12.53,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 12.63,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 12.74,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 12.84,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 12.94,
+      "in_flight": 4,
+      "submitted": 24,
+      "queue": 30
+    },
+    {
+      "t": 13.05,
+      "in_flight": 4,
+      "submitted": 25,
+      "queue": 29
+    },
+    {
+      "t": 13.15,
+      "in_flight": 4,
+      "submitted": 26,
+      "queue": 28
+    },
+    {
+      "t": 13.25,
+      "in_flight": 4,
+      "submitted": 27,
+      "queue": 27
+    },
+    {
+      "t": 13.36,
+      "in_flight": 4,
+      "submitted": 27,
+      "queue": 27
+    },
+    {
+      "t": 13.46,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 13.57,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 13.67,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 13.77,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 13.88,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 13.98,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 14.08,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 14.19,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 14.29,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 14.39,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 14.5,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 14.6,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 14.71,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 14.81,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 14.91,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 15.02,
+      "in_flight": 4,
+      "submitted": 28,
+      "queue": 26
+    },
+    {
+      "t": 15.12,
+      "in_flight": 4,
+      "submitted": 29,
+      "queue": 25
+    },
+    {
+      "t": 15.22,
+      "in_flight": 4,
+      "submitted": 31,
+      "queue": 23
+    },
+    {
+      "t": 15.33,
+      "in_flight": 4,
+      "submitted": 31,
+      "queue": 23
+    },
+    {
+      "t": 15.43,
+      "in_flight": 4,
+      "submitted": 32,
+      "queue": 22
+    }
+  ]
+}

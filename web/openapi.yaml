@@ -1,5 +1,5 @@
-# Контракт частини Web, C08 «Каршеринг». Маршрути додаються з кожною ЛР; зараз – ЛР1 і ЛР2.
-# x-course позначає роль маршруту для засобу check: main, object, update, cancel.
+# Контракт частини Web, C08 «Каршеринг». Маршрути додаються з кожною ЛР; зараз – ЛР1–ЛР3.
+# x-course позначає роль маршруту для засобу check: main, list, object, update, cancel, staff-action.
 # Приклади запитів посилаються на демодані migrations/900_seed.sql.
 openapi: 3.1.0
 info:
@@ -9,18 +9,23 @@ info:
     Водій бронює автомобіль на 15 хвилин (held), далі – розблокування, поїздка й завершення.
     Помилки – Problem Details (RFC 9457, `application/problem+json`). Ідентифікатори – рядки.
     Гроші – ціле число копійок і валюта. Час – RFC 3339 із зоною.
-    До ЛР3 користувача визначає заголовок `X-User-Id` (заздалегідь створений користувач).
+    З ЛР3 користувача визначає сесія: `POST /v1/auth/login` ставить cookie `session` (HttpOnly,
+    SameSite=Lax), `POST /v1/auth/logout` знищує сесію на сервері. `X-User-Id` більше не приймається.
+    Змінювальні запити з Origin, якого немає в списку клієнта, або з `Sec-Fetch-Site: cross-site`
+    без Origin відхиляються з 403 до виконання дії.
   license:
     name: MIT
     identifier: MIT
 servers:
   - url: http://localhost:8080
 security:
-  - userId: []
+  - cookieAuth: []
 
 tags:
   - name: service
     description: Службові маршрути
+  - name: auth
+    description: Вхід, вихід, поточний користувач
   - name: cars
     description: Автомобілі
   - name: rentals
@@ -49,6 +54,100 @@ paths:
               example:
                 status: ok
                 instance: app-a
+
+  /v1/auth/login:
+    post:
+      tags:
+        - auth
+      operationId: login
+      summary: Вхід – cookie сесії session (HttpOnly, SameSite=Lax)
+      description: |
+        Невідомий логін і неправильний пароль дають однакову відповідь 401. Д3.3: після
+        LOGIN_MAX_FAILURES (5) невдалих спроб за LOGIN_WINDOW_MIN (15) хв – 429 з Retry-After.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - login
+                - password
+              properties:
+                login:
+                  type: string
+                password:
+                  type: string
+                  format: password
+            examples:
+              user:
+                value:
+                  login: driver1
+                  password: driver1-pass
+              staff:
+                value:
+                  login: operator
+                  password: operator-pass
+      responses:
+        "200":
+          description: Вхід виконано; токен сесії – лише в cookie
+          headers:
+            Set-Cookie:
+              description: session=<токен>; HttpOnly; Max-Age=3600; Path=/; SameSite=lax
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Me"
+                  - type: object
+                    properties:
+                      expires_at:
+                        type: string
+                        format: date-time
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /v1/auth/logout:
+    post:
+      tags:
+        - auth
+      operationId: logout
+      summary: Вихід – рядок сесії видаляється, старий cookie більше не діє
+      responses:
+        "204":
+          description: Вихід виконано
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /v1/me:
+    get:
+      tags:
+        - auth
+      operationId: getMe
+      summary: Поточна особа й роль
+      responses:
+        "200":
+          description: Поточний користувач
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+              example:
+                id: u-driver-1
+                name: Олена Коваль
+                role: user
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /v1/cars:
     get:
@@ -100,7 +199,79 @@ paths:
         "422":
           $ref: "#/components/responses/Unprocessable"
 
+  /v1/cars/{id}/service:
+    post:
+      tags:
+        - cars
+      operationId: setCarService
+      summary: Перевести авто на обслуговування або повернути в роботу (лише роль staff)
+      description: |
+        Функція персоналу з картки. Роль перевіряє сервер: інші користувачі отримують 403.
+        Рядок авто блокується так само, як у бронюванні; авто в незавершеній оренді на
+        обслуговування не переводиться (409). Тіло необов'язкове: без нього – на обслуговування.
+      x-course: staff-action
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: car-pod-003
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                in_service:
+                  type: boolean
+                  default: true
+            examples:
+              normal:
+                value:
+                  in_service: true
+      responses:
+        "200":
+          description: Новий стан авто
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Car"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+
   /v1/rentals:
+    get:
+      tags:
+        - rentals
+      operationId: listMyRentals
+      summary: Мої оренди (останні 20); чужі рядки не повертаються
+      responses:
+        "200":
+          description: Оренди поточного користувача, від найновіших
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Rental"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
     post:
       tags:
         - rentals
@@ -295,11 +466,11 @@ paths:
 
 components:
   securitySchemes:
-    userId:
+    cookieAuth:
       type: apiKey
-      in: header
-      name: X-User-Id
-      description: "До ЛР3: ідентифікатор користувача з демоданих (u-driver-1, u-driver-2, u-operator)"
+      in: cookie
+      name: session
+      description: "Cookie сесії з POST /v1/auth/login (логіни демоданих: driver1, driver2, operator)"
 
   parameters:
     IdempotencyKey:
@@ -373,6 +544,21 @@ components:
                 type: string
               message:
                 type: string
+    Me:
+      type: object
+      required:
+        - id
+        - role
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum:
+            - user
+            - staff
     Money:
       type: object
       required:
@@ -516,16 +702,41 @@ components:
             status: 400
             instance: /v1/rentals
     Unauthorized:
-      description: Немає або невідомий X-User-Id
+      description: Не виконано вхід, сесію завершено або строк минув; для входу – неправильний логін чи пароль
       content:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
           example:
             type: https://example.edu/problems/unauthenticated
-            title: X-User-Id header required
+            title: Login required
             status: 401
             instance: /v1/rentals
+    Forbidden:
+      description: Функція лише для ролі staff (forbidden) або змінювальний запит зі стороннього сайту (cross-site-request)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://example.edu/problems/forbidden
+            title: Staff only
+            status: 403
+            instance: /v1/cars/car-pod-003/service
+    TooManyRequests:
+      description: Забагато невдалих спроб входу (Д3.3)
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://example.edu/problems/too-many-login-attempts
+            title: Too many failed login attempts
+            status: 429
+            instance: /v1/auth/login
     NotFound:
       description: Ресурсу немає (або чужа оренда)
       content:

@@ -14,14 +14,28 @@ POST /v1/rental-starts -> 202 (queued) або 429 з Retry-After, якщо че�
   * ресурс zone_cars – блокування рядка PostgreSQL (SELECT ... FOR UPDATE) в одній транзакції
     з перевіркою «rented < cars_total», збільшенням лічильника та записом ефекту. Блокування в
     базі, а не в процесі, діє й для інших процесів (задачі Ray у ЛР3).
+
+ЛР3 (EXECUTION=ray): замість пулу обробників у процесі api запит виконує задача Ray
+(ray_tasks.start_rental), а ресурс змінює приймач (effects.py). Диспетчер бере id з тієї самої
+обмеженої черги ЛР1, але подає нову задачу лише тоді, коли незавершених задач менше за
+IN_FLIGHT_LIMIT (О3.2). Поки межу досягнуто, запити чекають у черзі, а повна черга дає 429:
+сповільнення виконання не призводить до необмеженого подання задач. Результати обробляються в
+порядку завершення, а не подання: кожна задача має власне очікування.
+
+Д3.3: заголовок Idempotency-Key. Повтор із тим самим ключем і тілом повертає ту саму команду,
+з іншим тілом – 409; одночасні дублікати – одне приймання (первинний ключ таблиці ключів).
 """
 
 import asyncio
+import hashlib
+import json
 import random
+import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Header, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -37,8 +51,16 @@ ID = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:
 _queue: asyncio.Queue[str] | None = None
 _reserved = 0  # місця, зарезервовані запитами, які ще не поставили id у чергу
 _workers: list[asyncio.Task[None]] = []
+_dispatcher: list[asyncio.Task[None]] = []
 _busy = 0
 _counters = {"rejected_429": 0, "rejected_domain": 0, "done": 0, "failed": 0}
+
+# ЛР3: незавершені задачі Ray
+_slots: asyncio.Semaphore | None = None
+_in_flight = 0
+_ray_stats = {"submitted": 0, "max_in_flight": 0}
+_waiters: ThreadPoolExecutor | None = None
+_KEY = re.compile(r"^[\x21-\x7e]{8,128}$")
 
 
 class RentalStartCreate(BaseModel):
@@ -71,10 +93,18 @@ def _queue_length() -> int:
 # ---------------------------------------------------------------- приймання
 
 
+def _body_hash(body: RentalStartCreate) -> str:
+    return hashlib.sha256(json.dumps(body.model_dump(), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 @router.post("/rental-starts", status_code=202)
-async def accept(body: RentalStartCreate, response: Response) -> Any:
+async def accept(
+    body: RentalStartCreate, response: Response, idempotency_key: Annotated[str | None, Header()] = None
+) -> Any:
     global _reserved
     assert _queue is not None
+    if idempotency_key is not None and not _KEY.match(idempotency_key):
+        raise Problem(400, "idempotency-key-invalid", "Idempotency-Key must be 8-128 visible ASCII characters")
 
     # перевірка місця й резервування – без await між ними
     if _queue.qsize() + _reserved >= config.QUEUE_CAPACITY:
@@ -86,6 +116,27 @@ async def accept(body: RentalStartCreate, response: Response) -> Any:
             cur = await conn.execute("SELECT 1 FROM zone_cars WHERE zone_id = %s", (body.zone,))
             if await cur.fetchone() is None:
                 raise Problem(422, "unknown-zone", "Unknown zone", f"zone {body.zone!r} has no zone_cars resource")
+            if idempotency_key is not None:
+                # Д3.3: ключ записується першим; одночасний дублікат чекає на цьому рядку, а після
+                # фіксації першого отримує конфлікт і читає вже прийняту команду
+                cur = await conn.execute(
+                    "INSERT INTO dpc_idempotency_key (key, body_hash, command_id) VALUES (%s, %s, %s)"
+                    " ON CONFLICT (key) DO NOTHING RETURNING key",
+                    (idempotency_key, _body_hash(body), body.command_id),
+                )
+                if await cur.fetchone() is None:
+                    cur = await conn.execute(
+                        "SELECT k.body_hash, r.* FROM dpc_idempotency_key k JOIN rental_start r ON r.id = k.command_id"
+                        " WHERE k.key = %s",
+                        (idempotency_key,),
+                    )
+                    old = await cur.fetchone()
+                    if old["body_hash"] != _body_hash(body):
+                        raise Problem(409, "idempotency-key-reused", "Idempotency-Key was used with another body")
+                    return JSONResponse(
+                        _state_json(old), status_code=200,
+                        headers={"Location": f"/v1/rental-starts/{old['id']}", "Idempotent-Replayed": "true"},
+                    )
             cur = await conn.execute(
                 """
                 INSERT INTO rental_start (id, car_id, driver_id, zone_id, state)
@@ -265,8 +316,92 @@ async def _worker(n: int) -> None:
             _queue.task_done()
 
 
+# ---------------------------------------------------------------- ЛР3: задачі Ray
+
+
+async def _run_ray_task(command_id: str) -> None:
+    """Одна задача: processing -> подання в Ray -> очікування результату (у потоці, щоб не блокувати
+    цикл подій). Кінцевий стан пише приймач; тут – лише failed, якщо задача остаточно не вдалася."""
+    global _in_flight
+    from . import ray_tasks
+
+    assert _queue is not None and _slots is not None
+    started = time.monotonic()
+    try:
+        async with db.connection() as conn, conn.transaction():
+            cur = await conn.execute(
+                "UPDATE rental_start SET state = 'processing', started_at = now()"
+                " WHERE id = %s AND state = 'queued' RETURNING driver_id",
+                (command_id,),
+            )
+            req = await cur.fetchone()
+        if req is None:
+            return
+        ref = ray_tasks.start_rental.remote(command_id, req["driver_id"], config.LICENSE_CHECK_MS)
+        _ray_stats["submitted"] += 1
+        result = await asyncio.get_running_loop().run_in_executor(_waiters, _ray_get, ref)
+        outcome = result["decision"]
+        async with db.connection() as conn:  # підтвердження задачі: Ray повернув результат
+            await conn.execute(
+                "UPDATE rental_start_decision SET acked_at = now(), acked_by = %s WHERE command_id = %s",
+                (result.get("executor"), command_id),
+            )
+        _counters["done" if outcome == "done" else "rejected_domain"] += 1
+        log("rental_start.finished", command_id=command_id, state=outcome, executor=result.get("executor"),
+            deliveries=result.get("deliveries"), processing_ms=round((time.monotonic() - started) * 1000, 1))
+    except Exception as exc:  # noqa: BLE001 - задача вичерпала повтори; запит має дійти до кінцевого стану
+        _counters["failed"] += 1
+        log("rental_start.failed", command_id=command_id, error=type(exc).__name__)
+        try:
+            async with db.connection() as conn, conn.transaction():
+                await conn.execute(
+                    "UPDATE rental_start SET state = 'failed', reason = %s, finished_at = now()"
+                    " WHERE id = %s AND state IN ('queued', 'processing')",
+                    (type(exc).__name__, command_id),
+                )
+        except Exception as db_exc:  # noqa: BLE001 - база недоступна: запис лишиться processing до перезапуску
+            log("rental_start.fail_mark_skipped", command_id=command_id, error=type(db_exc).__name__)
+    finally:
+        _in_flight -= 1
+        _slots.release()
+        _queue.task_done()
+
+
+def _ray_get(ref: Any) -> dict[str, Any]:
+    import ray
+
+    return ray.get(ref)
+
+
+async def _ray_dispatcher() -> None:
+    global _in_flight
+    assert _queue is not None and _slots is not None
+    while True:
+        command_id = await _queue.get()
+        await _slots.acquire()  # О3.2: не більше IN_FLIGHT_LIMIT незавершених задач
+        _in_flight += 1
+        _ray_stats["max_in_flight"] = max(_ray_stats["max_in_flight"], _in_flight)
+        _workers.append(asyncio.create_task(_run_ray_task(command_id)))
+        _workers[:] = [t for t in _workers if not t.done()]
+
+
+def _connect_ray() -> None:
+    import ray
+
+    for attempt in range(1, 31):
+        try:
+            # api – клієнт кластера; задачі виконуються на вузлах ray-head і ray-worker
+            ray.init(address=config.RAY_ADDRESS, log_to_driver=False)
+            log("ray.connected", address=config.RAY_ADDRESS, attempt=attempt)
+            return
+        except Exception as exc:  # noqa: BLE001 - кластер ще стартує
+            log("ray.connect_retry", attempt=attempt, error=type(exc).__name__)
+            time.sleep(2)
+    raise RuntimeError("Ray cluster is not reachable")
+
+
 async def start() -> None:
-    global _queue
+    global _queue, _slots, _waiters
     _queue = asyncio.Queue(maxsize=config.QUEUE_CAPACITY)
     # черга живе в пам'яті процесу: запити, що лишилися незавершеними після аварії, позначаються failed
     try:
@@ -277,19 +412,32 @@ async def start() -> None:
             )
     except Exception as exc:  # noqa: BLE001 - база ще може стартувати; /health має працювати
         log("rental_start.recover_skipped", error=type(exc).__name__)
-    _workers.extend(asyncio.create_task(_worker(i)) for i in range(config.WORKERS))
+    if config.EXECUTION == "ray":
+        await asyncio.to_thread(_connect_ray)
+        _slots = asyncio.Semaphore(config.IN_FLIGHT_LIMIT)
+        _waiters = ThreadPoolExecutor(max_workers=config.IN_FLIGHT_LIMIT, thread_name_prefix="ray-wait")
+        _dispatcher.append(asyncio.create_task(_ray_dispatcher()))
+    else:
+        _workers.extend(asyncio.create_task(_worker(i)) for i in range(config.WORKERS))
     metrics.gauge("queue_length", _queue_length)
     metrics.gauge("queue_capacity", lambda: config.QUEUE_CAPACITY)
     metrics.gauge("workers", lambda: config.WORKERS)
     metrics.gauge("processing", lambda: _busy)
     metrics.gauge("rejected", lambda: _counters["rejected_429"] + _counters["rejected_domain"])
     metrics.gauge("rejected_queue_full", lambda: _counters["rejected_429"])
-    log("rental_start.pool_started", workers=config.WORKERS, capacity=config.QUEUE_CAPACITY,
-        resource_mode=config.RESOURCE_MODE)
+    metrics.gauge("tasks_in_flight", lambda: _in_flight)
+    metrics.gauge("tasks_in_flight_limit", lambda: config.IN_FLIGHT_LIMIT if config.EXECUTION == "ray" else 0)
+    metrics.gauge("tasks_submitted", lambda: _ray_stats["submitted"])
+    metrics.gauge("tasks_max_in_flight", lambda: _ray_stats["max_in_flight"])
+    log("rental_start.pool_started", execution=config.EXECUTION, workers=config.WORKERS,
+        in_flight_limit=config.IN_FLIGHT_LIMIT, capacity=config.QUEUE_CAPACITY, resource_mode=config.RESOURCE_MODE)
 
 
 async def stop() -> None:
-    for task in _workers:
+    for task in _dispatcher + _workers:
         task.cancel()
-    await asyncio.gather(*_workers, return_exceptions=True)
+    await asyncio.gather(*_dispatcher, *_workers, return_exceptions=True)
+    _dispatcher.clear()
     _workers.clear()
+    if _waiters is not None:
+        _waiters.shutdown(wait=False, cancel_futures=True)

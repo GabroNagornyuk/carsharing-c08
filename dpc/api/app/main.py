@@ -5,8 +5,9 @@ Where each lab plugs in (item numbers of the guide):
                     zone_cars resource under a row lock. TODO (O1.5, D1.4) optional items
   Lab 2 (C08): compute.py + integral.py - POST /v1/compute, GET /v1/compute/{id}, process pool,
                     shared-sum modes. TODO (D2.5, D2.6) optional items
-  TODO (O3.1-O3.4, D3.3, D3.4)  Ray tasks (this image also runs ray-head and ray-worker), the effect
-                    table and fault("after_effect_before_ack")
+  Lab 3 (C08): EXECUTION=ray - rental_starts.py dispatches the queue to Ray tasks (ray_tasks.py,
+                    IN_FLIGHT_LIMIT), effects.py is the receiver (decision table, one transaction),
+                    fault("after_effect_before_ack") in the task; D3.3 Idempotency-Key. TODO (D3.4)
   TODO (O4.2)       POST /v1/reports/main/refresh calls the given Spark runner (RUNNER_URL)
   TODO (O5.x)       GET /v1/panel, /v1/panel/batch: the windows written by your stream job
   TODO (O6.x)       GET /v1/coordinator, /v1/history; coordinators are separate processes
@@ -20,7 +21,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import compute, config, db, middleware, problems, rental_starts, service
+from . import compute, config, db, effects, middleware, problems, rental_starts, service
 from .jsonlog import log
 
 
@@ -47,9 +48,10 @@ app.add_middleware(
     allow_origins=config.CLIENT_ORIGINS,
     allow_methods=["*"],
     allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
-    expose_headers=["Location", "Retry-After", "X-Request-ID"],
+    expose_headers=["Location", "Retry-After", "X-Request-ID", "Idempotent-Replayed"],
 )
 problems.install(app)
 app.include_router(service.router)
 app.include_router(rental_starts.router)
+app.include_router(effects.router)
 app.include_router(compute.router)

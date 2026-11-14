@@ -9,6 +9,12 @@ web:
     - О2.4   # повторні спроби в клієнті
     - Д2.4   # продовження з If-Match (PATCH /v1/rentals/{id}, x-course: update)
     - Д2.5   # повторне скасування (POST /v1/rentals/{id}/cancel, x-course: cancel)
+    - О3.3   # CORS для походження клієнта, Origin / Sec-Fetch-Site для змінювальних запитів
+    - О3.4   # вхід, вихід, чужий об'єкт, функція персоналу в клієнті
+    - Д3.3   # обмеження спроб входу (LOGIN_MAX_FAILURES за LOGIN_WINDOW_MIN хв)
+  # ЛР3: вхід – сесія в cookie session; шлях функції персоналу з конкретним авто демоданих
+  roles:
+    staff-action: {method: POST, path: /v1/cars/car-pod-003/service}
   role_names:
     user: user
     staff: staff
@@ -34,8 +40,12 @@ dpc:
     - О2.2   # дослідження точності
     - Д2.1   # інший метод (Сімпсон, трапеції) і порівняння
     - Д2.4   # послідовне, попарне й компенсоване сумування
+    - О3.2   # IN_FLIGHT_LIMIT незавершених задач Ray
+    - Д3.3   # Idempotency-Key для POST /v1/rental-starts
   services:
     api: api
+    ray-head: ray-head
+    ray-worker: ray-worker
   load_s: 10
   resource:
     path: /v1/zone-cars/loadtest

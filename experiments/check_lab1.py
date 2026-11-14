@@ -69,7 +69,7 @@ def web_checks() -> None:
             is_problem = r.headers.get("content-type", "").startswith("application/problem+json")
             check(f"О1.4 {name}, Problem Details", r.status_code == want and is_problem, r.status_code)
         r = c.post("/v1/rentals", json={"car_id": "car-cen-001"}, headers=idem())
-        check("     без X-User-Id – 401", r.status_code == 401, r.status_code)
+        check("     без входу (cookie сесії) – 401", r.status_code == 401, r.status_code)
 
         # двоє (і більше) на одне авто: успіх лише один (інваріант 1)
         car = free_car(c, "airport")

@@ -1,6 +1,7 @@
 <!doctype html>
-<!-- Клієнт C08 «Каршеринг» (ЛР1): вибір зони, вільні авто, бронювання, результат або Problem Details.
-     Запуск з кореня репозиторію: python -m http.server 8081 --bind 127.0.0.1 --directory web/client -->
+<!-- Клієнт C08 «Каршеринг»: вхід і вихід (ЛР3), вільні авто, бронювання, мої оренди, сценарії доступу.
+     Запуск з кореня репозиторію: python -m http.server 8081 --bind 127.0.0.1 --directory web/client,
+     відкрити http://localhost:8081 -->
 <html lang="uk">
 <head>
     <meta charset="utf-8">
@@ -24,14 +25,15 @@
 <h1>Каршеринг</h1>
 
 <fieldset>
-    <legend>Хто я (до ЛР3 – заголовок X-User-Id)</legend>
-    <label>Користувач
-        <select id="user">
-            <option value="u-driver-1">Олена Коваль (водій)</option>
-            <option value="u-driver-2">Максим Бондар (водій)</option>
-            <option value="u-operator">Оператор Ірина (персонал)</option>
-        </select>
-    </label>
+    <legend>Вхід</legend>
+    <form id="login-form">
+        <label>Логін <input id="login" value="driver1" autocomplete="username" size="12"></label>
+        <label>Пароль <input id="password" type="password" value="driver1-pass" autocomplete="current-password" size="14"></label>
+        <button>Увійти</button>
+        <span class="muted">driver1, driver2 – водії; operator – персонал (пароль: &lt;логін&gt;-pass)</span>
+    </form>
+    <p id="who" class="muted">не виконано вхід</p>
+    <button id="logout" hidden>Вийти</button>
 </fieldset>
 
 <fieldset>
@@ -52,20 +54,105 @@
         <button id="book-service">авто на обслуговуванні</button></p>
 </fieldset>
 
+<fieldset>
+    <legend>Мої оренди</legend>
+    <button id="mine">Оновити</button>
+    <table>
+        <thead><tr><th>Оренда</th><th>Авто</th><th>Стан</th><th>Створена</th></tr></thead>
+        <tbody id="rentals"><tr><td colspan="4" class="muted">—</td></tr></tbody>
+    </table>
+</fieldset>
+
+<fieldset>
+    <legend>Доступ (перевіряє сервер)</legend>
+    <p><label>Оренда за id <input id="rental-id" size="38" placeholder="id чужої оренди"></label>
+        <button id="get-rental">Відкрити</button></p>
+    <p><label>Авто <input id="service-car" value="car-pod-003" size="12"></label>
+        <button id="to-service">На обслуговування (персонал)</button>
+        <button id="from-service">Повернути в роботу</button></p>
+    <p class="muted">Запит зі стороннього Origin: відкрийте <a id="evil" href="http://localhost:8082" target="_blank">сторонній сайт</a>
+        (python -m http.server 8082 --directory web/tools/evil-origin) у цьому ж браузері після входу.</p>
+</fieldset>
+
 <div id="result"></div>
 
 <script type="module">
-    import {call, getUser, kyivTime, money, mutate, Problem, setUser, UnknownResult} from "./api.js";
+    import {call, kyivTime, login, logout, me, money, mutate, Problem, UnknownResult} from "./api.js";
 
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"})[c]);
 
-    $("user").value = getUser();
-    $("user").onchange = () => { setUser($("user").value); loadCars(); };
+    $("login-form").onsubmit = async (event) => {
+        event.preventDefault();
+        try {
+            const {data} = await login($("login").value, $("password").value);
+            ok(`Вхід виконано: ${esc(data.name)} (${esc(data.role)}), сесія до ${esc(kyivTime(data.expires_at))}`);
+            await refreshAll();
+        } catch (error) {
+            showProblem(error);
+        }
+    };
+    $("logout").onclick = async () => {
+        try {
+            await logout();
+            ok("Вихід виконано: сесію на сервері знищено");
+        } catch (error) {
+            showProblem(error);
+        }
+        await refreshAll();
+    };
+    $("mine").onclick = loadRentals;
+    $("get-rental").onclick = async () => {
+        try {
+            const {data} = await call("GET", `/v1/rentals/${encodeURIComponent($("rental-id").value.trim())}`);
+            ok(`Оренда <code>${esc(data.id)}</code>: авто ${esc(data.car_id)}, стан ${esc(data.status)}`);
+        } catch (error) {
+            showProblem(error);
+        }
+    };
+    const service = (inService) => async () => {
+        try {
+            const {data} = await call("POST", `/v1/cars/${encodeURIComponent($("service-car").value.trim())}/service`,
+                {body: {in_service: inService}});
+            ok(`Авто <code>${esc(data.id)}</code> тепер у стані <b>${esc(data.status)}</b>`);
+            loadCars();
+        } catch (error) {
+            showProblem(error);
+        }
+    };
+    $("to-service").onclick = service(true);
+    $("from-service").onclick = service(false);
     $("zone").onchange = loadCars;
     $("refresh").onclick = loadCars;
     $("book-missing").onclick = () => book("no-such-car");
     $("book-service").onclick = () => book("car-pod-004");
+
+    function ok(html) {
+        $("result").innerHTML = `<div class="card ok">${html}</div>`;
+    }
+
+    async function refreshAll() {
+        const user = await me().catch(() => null);
+        $("who").textContent = user ? `Увійшли: ${user.name} · роль ${user.role} · ${user.id}` : "не виконано вхід";
+        $("logout").hidden = !user;
+        if (user) {
+            await Promise.all([loadCars(), loadRentals()]);
+        } else {
+            $("cars").innerHTML = `<tr><td colspan="5" class="muted">увійдіть, щоб бачити авто</td></tr>`;
+            $("rentals").innerHTML = `<tr><td colspan="4" class="muted">—</td></tr>`;
+        }
+    }
+
+    async function loadRentals() {
+        try {
+            const {data} = await call("GET", "/v1/rentals");
+            $("rentals").innerHTML = (data.items ?? []).map((r) => `<tr><td><code>${esc(r.id)}</code></td>
+                <td>${esc(r.car_id)}</td><td>${esc(r.status)}</td><td>${esc(kyivTime(r.created_at))}</td></tr>`).join("")
+                || `<tr><td colspan="4" class="muted">оренд немає</td></tr>`;
+        } catch (error) {
+            showProblem(error);
+        }
+    }
 
     function showProblem(error) {
         if (error instanceof UnknownResult) {
@@ -111,12 +198,13 @@
                 Тримається до ${esc(kyivTime(data.expires_at))} (Київ)<br>
                 <span class="muted">Оренда <code>${esc(headers.get("location") ?? data.id)}</code> · спроб: ${attempts}${headers.get("idempotent-replayed") === "true" ? " · збережений результат" : ""}</span></div>`;
             loadCars();
+            loadRentals();
         } catch (error) {
             showProblem(error);
         }
     }
 
-    loadCars();
+    refreshAll();
 </script>
 </body>
 </html>

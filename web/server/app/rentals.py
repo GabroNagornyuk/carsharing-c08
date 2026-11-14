@@ -101,6 +101,17 @@ async def create_rental(
     )
 
 
+@router.get("/rentals")
+async def my_rentals(user: Annotated[User, Depends(current_user)]) -> dict[str, Any]:
+    """ЛР3, О3.2: мої оренди. Власник – умова самого запиту, тож чужі рядки в список не потрапляють."""
+    async with db.connection() as conn:
+        cur = await conn.execute(
+            "SELECT * FROM rental WHERE user_id = %s ORDER BY created_at DESC, id DESC LIMIT 20", (user.id,)
+        )
+        rows = await cur.fetchall()
+    return {"items": [rental_json(r) for r in rows]}
+
+
 @router.get("/rentals/{rental_id}")
 async def get_rental(
     rental_id: str, user: Annotated[User, Depends(current_user)], response: Response
